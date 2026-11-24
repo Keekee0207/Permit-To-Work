@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  REQUESTER
+  AREA_OWNER
+  SAFETY_OFFICER
+  ADMIN
+}
+
+enum PermitType {
+  HOT_WORK
+  CONFINED_SPACE
+  WORKING_AT_HEIGHT
+  ELECTRICAL_LOTO
+}
+
+enum PermitStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  CLOSED
+  CLOSED_VERIFIED
+  CANCELLED
+}
+
+enum ApprovalDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ExtensionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                String             @id @default(uuid())
+  email             String             @unique
+  name              String
+  passwordHash      String
+  role              Role               @default(REQUESTER)
+  assignedAreas     UserArea[]
+  permitsRequested  Permit[]           @relation("PermitRequester")
+  approvals         PermitApproval[]
+  extensionsRaised  ExtensionRequest[] @relation("ExtensionRequester")
+  extensionsReviewed ExtensionRequest[] @relation("ExtensionReviewer")
+  auditLogs         AuditLog[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model Plant {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String   @unique
+  location  String
+  areas     Area[]
+  permits   Permit[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Area {
+  id          String      @id @default(uuid())
+  plantId     String
+  plant       Plant       @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  name        String
+  code        String
+  equipment   Equipment[]
+  permits     Permit[]
+  assignedUsers UserArea[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([plantId, code])
+}
+
+model UserArea {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaId    String
+  area      Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, areaId])
+}
+
+model Equipment {
+  id          String   @id @default(uuid())
+  areaId      String
+  area        Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  tagCode     String   @unique
+  name        String
+  description String?
+  permits     Permit[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Permit {
+  id                   String           @id @default(uuid())
+  permitNumber         String           @unique
+  type                 PermitType
+  status               PermitStatus     @default(DRAFT)
+  requesterId          String
+  requester            User             @relation("PermitRequester", fields: [requesterId], references: [id])
+  contractorTeam       String
+  workDescription      String
+  plantId              String
+  plant                Plant            @relation(fields: [plantId], references: [id])
+  areaId               String
+  area                 Area             @relation(fields: [areaId], references: [id])
+  equipmentId          String?
+  equipment            Equipment?       @relation(fields: [equipmentId], references: [id])
+  plannedStart         DateTime
+  plannedEnd           DateTime
+  extendedUntil        DateTime?
+  hazards              String[]         @default([])
+  ppeRequired          String[]         @default([])
+  precautionsChecklist Json             @default("[]")
+  typeSpecificData     Json             @default("{}")
+  completionNotes      String?
+  photoUrl             String?
+  approvals            PermitApproval[]
+  extensions           ExtensionRequest[]
+  auditLogs            AuditLog[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+}
+
+model PermitApproval {
+  id               String           @id @default(uuid())
+  permitId         String
+  permit           Permit           @relation(fields: [permitId], references: [id], onDelete: Cascade)
+  requiredRole     Role
+  approverId       String?
+  approver         User?            @relation(fields: [approverId], references: [id])
+  decision         ApprovalDecision @default(PENDING)
+  comment          String?
+  signatureDataUrl String?
+  reviewedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([permitId, requiredRole])
+}
+
+model ExtensionRequest {
+  id             String          @id @default(uuid())
+  permitId       String
+  permit         Permit          @relation(fields: [permitId], references: [id], onDelete: Cascade)
+  requestedById  String
+  requestedBy    User            @relation("ExtensionRequester", fields: [requestedById], references: [id])
+  requestedHours Int
+  reason         String
+  status         ExtensionStatus @default(PENDING)
+  reviewedById   String?
+  reviewedBy     User?           @relation("ExtensionReviewer", fields: [reviewedById], references: [id])
+  comment        String?
+  reviewedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  permitId  String
+  permit    Permit   @relation(fields: [permitId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User     @relation(fields: [actorId], references: [id])
+  action    String
+  fromValue String?
+  toValue   String?
+  comment   String?
+  createdAt DateTime @default(now())
+}
