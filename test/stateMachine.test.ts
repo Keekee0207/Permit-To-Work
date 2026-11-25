@@ -82,25 +82,88 @@ describe("Permit State Machine & Hard RBAC Rules", () => {
     expect(res.error).toContain("You can only submit your own permit")
   })
 
-  // TEST 2: Hard Rule 5 - Self-Approval Ban
-  it("strictly blocks self-approval even if user is SAFETY_OFFICER, AREA_OWNER, or ADMIN", () => {
-    const pendingPermit = {
-      ...basePermit,
-      status: PermitStatus.PENDING_APPROVAL,
-      requesterId: "user-safety",
-    }
+  // TEST 2: Hard Rule 5 - Self-Approval Ban across ALL roles
+  describe("Self-Approval Ban (Strictly enforced regardless of role)", () => {
+    it("blocks a SAFETY_OFFICER from approving their own permit", () => {
+      const pendingPermit = {
+        ...basePermit,
+        status: PermitStatus.PENDING_APPROVAL,
+        requesterId: "user-safety",
+      }
 
-    const res = PermitStateMachine.canReviewApproval(
-      {
-        permit: pendingPermit,
-        currentUser: { id: "user-safety", role: Role.SAFETY_OFFICER },
-        now: new Date("2026-11-24T10:00:00Z"),
-      },
-      ApprovalDecision.APPROVED
-    )
+      const res = PermitStateMachine.canReviewApproval(
+        {
+          permit: pendingPermit,
+          currentUser: { id: "user-safety", role: Role.SAFETY_OFFICER },
+          now: new Date("2026-11-24T10:00:00Z"),
+        },
+        ApprovalDecision.APPROVED
+      )
 
-    expect(res.allowed).toBe(false)
-    expect(res.error).toContain("Self-approval is strictly forbidden")
+      expect(res.allowed).toBe(false)
+      expect(res.error).toBe("Self-approval is strictly forbidden. You cannot approve or reject a permit you requested.")
+    })
+
+    it("blocks an AREA_OWNER from approving their own permit even in their assigned area", () => {
+      const pendingPermit = {
+        ...basePermit,
+        status: PermitStatus.PENDING_APPROVAL,
+        requesterId: "user-areaowner",
+        areaId: "area-1",
+      }
+
+      const res = PermitStateMachine.canReviewApproval(
+        {
+          permit: pendingPermit,
+          currentUser: { id: "user-areaowner", role: Role.AREA_OWNER, assignedAreaIds: ["area-1"] },
+          now: new Date("2026-11-24T10:00:00Z"),
+        },
+        ApprovalDecision.APPROVED
+      )
+
+      expect(res.allowed).toBe(false)
+      expect(res.error).toBe("Self-approval is strictly forbidden. You cannot approve or reject a permit you requested.")
+    })
+
+    it("blocks an ADMIN from approving their own permit", () => {
+      const pendingPermit = {
+        ...basePermit,
+        status: PermitStatus.PENDING_APPROVAL,
+        requesterId: "user-admin",
+      }
+
+      const res = PermitStateMachine.canReviewApproval(
+        {
+          permit: pendingPermit,
+          currentUser: { id: "user-admin", role: Role.ADMIN },
+          now: new Date("2026-11-24T10:00:00Z"),
+        },
+        ApprovalDecision.APPROVED
+      )
+
+      expect(res.allowed).toBe(false)
+      expect(res.error).toBe("Self-approval is strictly forbidden. You cannot approve or reject a permit you requested.")
+    })
+
+    it("blocks a REQUESTER from approving any permit", () => {
+      const pendingPermit = {
+        ...basePermit,
+        status: PermitStatus.PENDING_APPROVAL,
+        requesterId: "other-user",
+      }
+
+      const res = PermitStateMachine.canReviewApproval(
+        {
+          permit: pendingPermit,
+          currentUser: { id: "user-requester", role: Role.REQUESTER },
+          now: new Date("2026-11-24T10:00:00Z"),
+        },
+        ApprovalDecision.APPROVED
+      )
+
+      expect(res.allowed).toBe(false)
+      expect(res.error).toBe("Requesters are not authorized to approve permits.")
+    })
   })
 
   // TEST 3: Hard Rule 6 - Area Owner Scoping
