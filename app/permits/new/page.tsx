@@ -55,6 +55,7 @@ function PermitFormContent() {
   const [checkingConflict, setCheckingConflict] = useState(false)
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [draftSavedToast, setDraftSavedToast] = useState(false)
 
   // Active Type Configuration
   const currentConfig: PermitTypeDefinition = PERMIT_TYPE_REGISTRY[selectedType]
@@ -100,6 +101,13 @@ function PermitFormContent() {
           router.push("/login")
           return
         }
+        
+        // Safety check: Area Owners and Safety Officers are not allowed to create permits
+        if (userData.user.role !== "REQUESTER" && userData.user.role !== "ADMIN") {
+          router.push("/")
+          return
+        }
+
         setCurrentUser(userData.user)
 
         const plantList = plantData.plants || []
@@ -254,7 +262,17 @@ function PermitFormContent() {
             body: JSON.stringify({ action: "SUBMIT" }),
           })
         }
-        router.push(`/permits/${permitId}`)
+
+        if (!submitNow) {
+          // Saved as draft: show confirmation banner/toast and redirect to dashboard
+          setDraftSavedToast(true)
+          setTimeout(() => {
+            router.push("/")
+            router.refresh()
+          }, 1200)
+        } else {
+          router.push(`/permits/${permitId}`)
+        }
       }
     } catch (err: any) {
       setError("Network error. Please try again.")
@@ -295,6 +313,18 @@ function PermitFormContent() {
               : "Single shared industrial permit workflow with type-specific safety controls."}
           </p>
         </div>
+
+        {draftSavedToast && (
+          <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-900 text-sm font-semibold rounded-lg flex items-center justify-between shadow-sm animate-pulse">
+            <div className="flex items-center gap-2.5">
+              <CheckSquare className="w-5 h-5 text-emerald-600" />
+              <span>Draft saved successfully! Returning to Dashboard...</span>
+            </div>
+            <span className="text-xs text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-full font-mono">
+              Saved as DRAFT
+            </span>
+          </div>
+        )}
 
         {error && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">

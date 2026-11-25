@@ -56,85 +56,52 @@ export function Navbar() {
               </div>
             </Link>
 
-            {/* Nav Links */}
-            <nav className="hidden md:flex items-center gap-1 ml-4">
-              <Link
-                href="/"
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  pathname === "/"
-                    ? "text-blue-600 bg-blue-50/60 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                }`}
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/permits/new"
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  pathname === "/permits/new"
-                    ? "text-blue-600 bg-blue-50/60 font-semibold"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                }`}
-              >
-                New Permit
-              </Link>
-              {currentUser?.role === "ADMIN" && (
+            {/* Nav Links - only visible when logged in and not on login page */}
+            {currentUser && pathname !== "/login" && (
+              <nav className="hidden md:flex items-center gap-1 ml-4">
                 <Link
-                  href="/admin"
+                  href="/"
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    pathname === "/admin"
+                    pathname === "/"
                       ? "text-blue-600 bg-blue-50/60 font-semibold"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
-                  Admin Panel
+                  Dashboard
                 </Link>
-              )}
-            </nav>
+                {(currentUser?.role === "REQUESTER" || currentUser?.role === "ADMIN") && (
+                  <Link
+                    href="/permits/new"
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      pathname === "/permits/new"
+                        ? "text-blue-600 bg-blue-50/60 font-semibold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`}
+                  >
+                    New Permit
+                  </Link>
+                )}
+                {currentUser?.role === "ADMIN" && (
+                  <Link
+                    href="/admin"
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      pathname === "/admin"
+                        ? "text-blue-600 bg-blue-50/60 font-semibold"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`}
+                  >
+                    Admin Panel
+                  </Link>
+                )}
+              </nav>
+            )}
           </div>
 
-          {/* Right Action & User Profile */}
+          {/* Right Action & User Profile - only show when logged in and not on login page */}
           <div className="flex items-center gap-3">
-            {currentUser ? (
+            {currentUser && pathname !== "/login" ? (
               <div className="flex items-center gap-3">
-                {/* Role Switcher Pill for Testing / Evaluation */}
-                <div className="hidden lg:flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
-                  <span className="text-[11px] text-slate-500 font-medium px-1.5">Switch Demo:</span>
-                  <button
-                    onClick={() => quickSwitch("requester@chennai.opmaint.com")}
-                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition ${
-                      currentUser.role === "REQUESTER" ? "bg-white text-blue-600 shadow-xs font-semibold" : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    Requester
-                  </button>
-                  <button
-                    onClick={() => quickSwitch("areaowner@chennai.opmaint.com")}
-                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition ${
-                      currentUser.role === "AREA_OWNER" ? "bg-white text-blue-600 shadow-xs font-semibold" : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    Area Owner
-                  </button>
-                  <button
-                    onClick={() => quickSwitch("safety@chennai.opmaint.com")}
-                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition ${
-                      currentUser.role === "SAFETY_OFFICER" ? "bg-white text-blue-600 shadow-xs font-semibold" : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    Safety Officer
-                  </button>
-                  <button
-                    onClick={() => quickSwitch("admin@chennai.opmaint.com")}
-                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition ${
-                      currentUser.role === "ADMIN" ? "bg-white text-blue-600 shadow-xs font-semibold" : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    Admin
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                <div className="flex items-center gap-2 pl-2">
                   <div className="flex flex-col text-right">
                     <span className="text-xs font-semibold text-slate-900 leading-tight">
                       {currentUser.name}
@@ -152,14 +119,14 @@ export function Navbar() {
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : pathname !== "/login" ? (
               <Link
                 href="/login"
                 className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs"
               >
                 Sign In
               </Link>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

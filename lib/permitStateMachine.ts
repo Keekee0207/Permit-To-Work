@@ -102,6 +102,14 @@ export class PermitStateMachine {
       }
     }
 
+    // Rule: Admin cannot approve in the place of Area Owner or Safety Officer
+    if (currentUser.role === Role.ADMIN) {
+      return {
+        allowed: false,
+        error: "Admins cannot sign approvals in place of Area Owners or Safety Officers. Multi-tier safety sign-offs require the designated field roles.",
+      }
+    }
+
     // Rule: Requester cannot approve anything
     if (currentUser.role === Role.REQUESTER) {
       return { allowed: false, error: "Requesters are not authorized to approve permits." }
@@ -147,11 +155,6 @@ export class PermitStateMachine {
       satisfiesRole = Role.SAFETY_OFFICER
     } else if (currentUser.role === Role.AREA_OWNER) {
       satisfiesRole = Role.AREA_OWNER
-    } else if (currentUser.role === Role.ADMIN) {
-      // Admin can approve either slot that is currently pending
-      const pendingSafety = approvals.find((a) => a.requiredRole === Role.SAFETY_OFFICER && a.decision === ApprovalDecision.PENDING)
-      const pendingArea = approvals.find((a) => a.requiredRole === Role.AREA_OWNER && a.decision === ApprovalDecision.PENDING)
-      satisfiesRole = pendingArea ? Role.AREA_OWNER : pendingSafety ? Role.SAFETY_OFFICER : Role.SAFETY_OFFICER
     }
 
     if (!satisfiesRole) {

@@ -103,19 +103,28 @@ export default function PermitDetailPage() {
     )
   }
 
-  const isRequester = currentUser?.id === permit.requesterId
+  const currentUserId = currentUser?.id || currentUser?.userId
+  const isRequester = currentUserId === permit.requesterId
   const isSafetyOfficer = currentUser?.role === "SAFETY_OFFICER"
   const isAdmin = currentUser?.role === "ADMIN"
   const isAreaOwner =
     currentUser?.role === "AREA_OWNER" &&
     (currentUser?.assignedAreaIds?.includes(permit.areaId) ||
-      permit.area?.assignedUsers?.some((u: any) => u.userId === currentUser?.id))
+      permit.area?.assignedUsers?.some((u: any) => u.userId === currentUserId))
 
-  // Check if current user can approve
+  // Check existing approvals for each role
+  const areaOwnerApproval = permit.approvals?.find((a: any) => a.requiredRole === "AREA_OWNER")
+  const safetyOfficerApproval = permit.approvals?.find((a: any) => a.requiredRole === "SAFETY_OFFICER")
+  const hasAreaOwnerApproved = areaOwnerApproval?.decision === "APPROVED"
+  const hasSafetyOfficerApproved = safetyOfficerApproval?.decision === "APPROVED"
+
+  // Check if current user can approve (and has not already approved)
+  // Note: Admins are not allowed to approve in place of field Area Owners or Safety Officers
   const canUserApprove =
     permit.status === "PENDING_APPROVAL" &&
     !isRequester && // Self-approval ban
-    (isSafetyOfficer || isAreaOwner || isAdmin)
+    ((isAreaOwner && !hasAreaOwnerApproved) ||
+      (isSafetyOfficer && !hasSafetyOfficerApproved))
 
   // Execute State Machine Action
   const executeAction = async (action: string, payload: any = {}) => {
@@ -345,6 +354,13 @@ export default function PermitDetailPage() {
                 <Send className="w-3.5 h-3.5" />
                 Submit for Approval
               </button>
+            )}
+
+            {/* DRAFT Info notice if viewed by other roles */}
+            {permit.status === "DRAFT" && !isRequester && !isAdmin && (
+              <span className="text-xs text-slate-500 italic">
+                Draft in progress by {permit.requester?.name || "Requester"}. Awaiting submission.
+              </span>
             )}
 
             {/* REVIEW / APPROVE (for PENDING_APPROVAL) */}

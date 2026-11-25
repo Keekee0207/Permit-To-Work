@@ -86,6 +86,7 @@ export default function DashboardPage() {
 
   // Computed metrics
   const activePermits = permits.filter((p) => p.status === "ACTIVE")
+  const pendingApprovals = permits.filter((p) => p.status === "PENDING_APPROVAL")
   
   // Permits expiring within next 2 hours (120 minutes)
   const expiringSoonPermits = permits.filter((p) => {
@@ -167,13 +168,15 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/permits/new"
-            className="min-h-[48px] px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-xs transition"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            Raise New Permit
-          </Link>
+          {(currentUser?.role === "REQUESTER" || currentUser?.role === "ADMIN") && (
+            <Link
+              href="/permits/new"
+              className="min-h-[48px] px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-xs transition"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              Raise New Permit
+            </Link>
+          )}
         </div>
       </div>
 
@@ -217,15 +220,18 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* My Approvals Pending Switcher */}
+        {/* My Approvals Pending Filter Card */}
         <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex flex-col justify-between">
           <div>
             <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">
-              Approvals Filter
+              My Action Items
             </span>
             <div className="text-sm font-semibold text-slate-800 mt-1">
               Role: <span className="font-mono text-blue-600">{currentUser?.role}</span>
             </div>
+            <p className="text-[11px] text-[#475569] mt-0.5">
+              Filter permits specifically requiring your signature
+            </p>
           </div>
           <button
             onClick={() => setOnlyMyPending(!onlyMyPending)}
@@ -235,8 +241,8 @@ export default function DashboardPage() {
                 : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
             }`}
           >
-            <span>Show "My Approvals Pending"</span>
-            <span className={`w-2 h-2 rounded-full ${onlyMyPending ? "bg-white" : "bg-slate-300"}`} />
+            <span>{onlyMyPending ? "Showing My Pending Approvals" : "Show My Pending Approvals"}</span>
+            <span className={`w-2.5 h-2.5 rounded-full ${onlyMyPending ? "bg-white" : "bg-slate-300"}`} />
           </button>
         </div>
       </div>

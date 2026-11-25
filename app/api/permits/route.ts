@@ -93,6 +93,14 @@ export async function POST(req: NextRequest) {
     const user = await getSessionUser(req)
     if (!user) return unauthorizedResponse()
 
+    // Enforce role restriction: Only REQUESTER and ADMIN can create permits
+    if (user.role !== Role.REQUESTER && user.role !== Role.ADMIN) {
+      return NextResponse.json(
+        { error: "Only Requesters and Admins can create permits. Area Owners and Safety Officers are restricted to approval actions." },
+        { status: 403 }
+      )
+    }
+
     const body = await req.json()
     const {
       type,
