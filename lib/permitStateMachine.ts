@@ -361,7 +361,7 @@ export class PermitStateMachine {
   static canCancel(ctx: StateMachineContext, reason: string): TransitionResult {
     const { permit, currentUser } = ctx
 
-    const nonTerminalStatuses = [
+    const nonTerminalStatuses: PermitStatus[] = [
       PermitStatus.DRAFT,
       PermitStatus.PENDING_APPROVAL,
       PermitStatus.APPROVED,

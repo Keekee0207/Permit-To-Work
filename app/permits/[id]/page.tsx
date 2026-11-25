@@ -254,7 +254,7 @@ export default function PermitDetailPage() {
     }
   }
 
-  const config = PERMIT_TYPE_REGISTRY[permit.type]
+  const config = PERMIT_TYPE_REGISTRY[permit.type as keyof typeof PERMIT_TYPE_REGISTRY]
   const typeData = (permit.typeSpecificData as any) || {}
   const precautions = Array.isArray(permit.precautionsChecklist) ? permit.precautionsChecklist : []
   const entryLogs = Array.isArray(typeData.entryExitLog) ? typeData.entryExitLog : []
@@ -325,6 +325,16 @@ export default function PermitDetailPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* EDIT DRAFT (for DRAFT) */}
+            {permit.status === "DRAFT" && (isRequester || isAdmin) && (
+              <Link
+                href={`/permits/new?editDraftId=${permit.id}`}
+                className="min-h-[44px] px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition border border-slate-300"
+              >
+                Edit Draft
+              </Link>
+            )}
+
             {/* SUBMIT (for DRAFT) */}
             {permit.status === "DRAFT" && (isRequester || isAdmin) && (
               <button

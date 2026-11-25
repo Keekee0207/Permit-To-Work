@@ -28,8 +28,11 @@ export default function DashboardPage() {
   // Filters
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL")
   const [selectedType, setSelectedType] = useState<string>("ALL")
+  const [selectedArea, setSelectedArea] = useState<string>("ALL")
+  const [dateFilter, setDateFilter] = useState<string>("")
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [onlyMyPending, setOnlyMyPending] = useState<boolean>(false)
+  const [availableAreas, setAvailableAreas] = useState<any[]>([])
 
   // Real-time tick for countdown
   const [now, setNow] = useState<number>(Date.now())
@@ -41,13 +44,27 @@ export default function DashboardPage() {
 
   const loadData = async () => {
     try {
-      const userRes = await fetch("/api/auth/me")
+      const [userRes, plantsRes] = await Promise.all([
+        fetch("/api/auth/me"),
+        fetch("/api/plants"),
+      ])
       const userData = await userRes.json()
       if (!userData.user) {
         router.push("/login")
         return
       }
       setCurrentUser(userData.user)
+
+      const plantsData = await plantsRes.json()
+      const areasList: any[] = []
+      if (plantsData.plants) {
+        plantsData.plants.forEach((pl: any) => {
+          if (pl.areas) {
+            pl.areas.forEach((a: any) => areasList.push({ ...a, plantName: pl.name }))
+          }
+        })
+      }
+      setAvailableAreas(areasList)
 
       const url = new URL("/api/permits", window.location.origin)
       if (onlyMyPending) {
@@ -82,6 +99,12 @@ export default function DashboardPage() {
   const filteredPermits = permits.filter((p) => {
     if (selectedStatus !== "ALL" && p.status !== selectedStatus) return false
     if (selectedType !== "ALL" && p.type !== selectedType) return false
+    if (selectedArea !== "ALL" && p.areaId !== selectedArea) return false
+    if (dateFilter) {
+      const pStart = new Date(p.plannedStart).toISOString().slice(0, 10)
+      const pEnd = new Date(p.extendedUntil || p.plannedEnd).toISOString().slice(0, 10)
+      if (dateFilter < pStart || dateFilter > pEnd) return false
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       const matchNumber = p.permitNumber.toLowerCase().includes(q)
@@ -259,6 +282,27 @@ export default function DashboardPage() {
 
         <div className="flex items-center gap-2 flex-wrap">
           <select
+            value={selectedArea}
+            onChange={(e) => setSelectedArea(e.target.value)}
+            className="min-h-[40px] px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
+          >
+            <option value="ALL">All Areas</option>
+            {availableAreas.map((a: any) => (
+              <option key={a.id} value={a.id}>
+                {a.name} ({a.code})
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            title="Filter by active date"
+            className="min-h-[40px] px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
+          />
+
+          <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
             className="min-h-[40px] px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
@@ -286,6 +330,22 @@ export default function DashboardPage() {
             <option value="CLOSED_VERIFIED">Closed & Verified</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
+
+          {(selectedStatus !== "ALL" || selectedType !== "ALL" || selectedArea !== "ALL" || dateFilter || searchQuery) && (
+            <button
+              onClick={() => {
+                setSelectedStatus("ALL")
+                setSelectedType("ALL")
+                setSelectedArea("ALL")
+                setDateFilter("")
+                setSearchQuery("")
+              }}
+              title="Reset all filters"
+              className="min-h-[40px] px-2.5 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50/50 rounded-lg hover:bg-red-50"
+            >
+              Reset
+            </button>
+          )}
 
           <button
             onClick={loadData}

@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status") as PermitStatus | null
     const type = searchParams.get("type") as PermitType | null
     const areaId = searchParams.get("areaId")
+    const startDate = searchParams.get("startDate")
+    const endDate = searchParams.get("endDate")
     const pendingMyApproval = searchParams.get("pendingMyApproval") === "true"
 
     const where: any = {}
@@ -28,8 +30,14 @@ export async function GET(req: NextRequest) {
     if (type) {
       where.type = type
     }
-    if (areaId) {
+    if (areaId && areaId !== "ALL") {
       where.areaId = areaId
+    }
+    if (startDate) {
+      where.plannedStart = { ...where.plannedStart, gte: new Date(startDate) }
+    }
+    if (endDate) {
+      where.plannedEnd = { ...where.plannedEnd, lte: new Date(endDate) }
     }
 
     // Role-specific filtering if "pendingMyApproval" requested

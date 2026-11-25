@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { PERMIT_TYPE_REGISTRY, PermitTypeDefinition } from "@/lib/permitTypeConfig"
 import { PermitType } from "@prisma/client"
 import { 
@@ -11,18 +11,22 @@ import {
   Send, 
   CheckSquare, 
   AlertTriangle, 
-  Info,
-  Calendar,
-  Building2,
-  HardHat,
-  Eye
+  Info, 
+  Calendar, 
+  Building2, 
+  HardHat, 
+  Eye,
+  RotateCw
 } from "lucide-react"
 
-export default function CreatePermitPage() {
+function PermitFormContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const editDraftId = searchParams.get("editDraftId")
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [plants, setPlants] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [isEditingDraft, setIsEditingDraft] = useState(false)
 
   // Form State
   const [selectedType, setSelectedType] = useState<PermitType>("HOT_WORK")
@@ -105,6 +109,32 @@ export default function CreatePermitPage() {
           if (plantList[0].areas.length > 0) {
             setAreaId(plantList[0].areas[0].id)
           }
+        }
+
+        // If editing a draft, load the existing draft values
+        if (editDraftId) {
+          fetch(`/api/permits/${editDraftId}`)
+            .then((r) => r.json())
+            .then((pData) => {
+              if (pData.permit && pData.permit.status === "DRAFT") {
+                const p = pData.permit
+                setIsEditingDraft(true)
+                setSelectedType(p.type)
+                setPlantId(p.plantId)
+                setAreaId(p.areaId)
+                setEquipmentId(p.equipmentId || "")
+                setContractorTeam(p.contractorTeam || "")
+                setWorkDescription(p.workDescription || "")
+                setPhotoUrl(p.photoUrl || "")
+                if (p.plannedStart) setPlannedStart(new Date(p.plannedStart).toISOString().slice(0, 16))
+                if (p.plannedEnd) setPlannedEnd(new Date(p.plannedEnd).toISOString().slice(0, 16))
+                if (Array.isArray(p.hazards)) setHazards(p.hazards)
+                if (Array.isArray(p.ppeRequired)) setPpeRequired(p.ppeRequired)
+                if (Array.isArray(p.precautionsChecklist)) setPrecautions(p.precautionsChecklist)
+                if (p.typeSpecificData) setTypeData(p.typeSpecificData)
+              }
+            })
+            .catch(() => {})
         }
         setLoading(false)
       })
@@ -202,17 +232,29 @@ export default function CreatePermitPage() {
     }
 
     try {
-      const res = await fetch("/api/permits", {
-        method: "POST",
+      const apiUrl = isEditingDraft ? `/api/permits/${editDraftId}` : "/api/permits"
+      const apiMethod = isEditingDraft ? "PUT" : "POST"
+
+      const res = await fetch(apiUrl, {
+        method: apiMethod,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
 
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || "Failed to create permit")
+        setError(data.error || "Failed to save permit")
       } else {
-        router.push(`/permits/${data.permit.id}`)
+        const permitId = data.permit?.id || editDraftId
+        if (isEditingDraft && submitNow) {
+          // If editing a draft and user clicked Submit, trigger the submit action
+          await fetch(`/api/permits/${permitId}/actions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "SUBMIT" }),
+          })
+        }
+        router.push(`/permits/${permitId}`)
       }
     } catch (err: any) {
       setError("Network error. Please try again.")
@@ -245,10 +287,12 @@ export default function CreatePermitPage() {
       <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-xs p-6 space-y-6">
         <div>
           <h1 className="text-xl font-bold text-[#0F172A] tracking-tight">
-            Raise Permit to Work
+            {isEditingDraft ? "Edit Draft Permit to Work" : "Raise Permit to Work"}
           </h1>
           <p className="text-xs text-[#475569] mt-0.5">
-            Single shared industrial permit workflow with type-specific safety controls.
+            {isEditingDraft
+              ? "Modify safety checks and parameters on this saved draft before submission."
+              : "Single shared industrial permit workflow with type-specific safety controls."}
           </p>
         </div>
 
@@ -593,5 +637,20 @@ export default function CreatePermitPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CreatePermitPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-12 text-center text-slate-500 text-sm flex items-center justify-center gap-2">
+          <RotateCw className="w-5 h-5 animate-spin text-blue-600" />
+          Loading permit workspace...
+        </div>
+      }
+    >
+      <PermitFormContent />
+    </Suspense>
   )
 }
