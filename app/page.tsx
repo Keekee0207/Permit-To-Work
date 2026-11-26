@@ -181,7 +181,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Overview Stat Cards: What's Active Right Now & What's Expiring Soon */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Active Permits */}
         <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex items-center justify-between">
           <div>
@@ -220,30 +220,29 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* My Approvals Pending Filter Card */}
-        <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex flex-col justify-between">
+        {/* Pending Approval Stat Card */}
+        <div 
+          onClick={() => setSelectedStatus(selectedStatus === "PENDING_APPROVAL" ? "ALL" : "PENDING_APPROVAL")}
+          className={`bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex items-center justify-between cursor-pointer transition hover:border-blue-400 ${
+            selectedStatus === "PENDING_APPROVAL" ? "ring-2 ring-blue-600 bg-blue-50/20" : ""
+          }`}
+          title="Click to filter table by Pending Approval"
+        >
           <div>
-            <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">
-              My Action Items
+            <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+              Pending Approvals
             </span>
-            <div className="text-sm font-semibold text-slate-800 mt-1">
-              Role: <span className="font-mono text-blue-600">{currentUser?.role}</span>
+            <div className="text-3xl font-extrabold text-[#0F172A] mt-1">
+              {pendingApprovals.length}
             </div>
             <p className="text-[11px] text-[#475569] mt-0.5">
-              Filter permits specifically requiring your signature
+              {selectedStatus === "PENDING_APPROVAL" ? "Click to clear filter" : "Click to view in table"}
             </p>
           </div>
-          <button
-            onClick={() => setOnlyMyPending(!onlyMyPending)}
-            className={`mt-2 min-h-[38px] px-3 py-1.5 rounded-lg text-xs font-semibold border transition flex items-center justify-between ${
-              onlyMyPending
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-            }`}
-          >
-            <span>{onlyMyPending ? "Showing My Pending Approvals" : "Show My Pending Approvals"}</span>
-            <span className={`w-2.5 h-2.5 rounded-full ${onlyMyPending ? "bg-white" : "bg-slate-300"}`} />
-          </button>
+          <div className="w-12 h-12 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center text-blue-600">
+            <Filter className="w-6 h-6" />
+          </div>
         </div>
       </div>
 
