@@ -40,6 +40,26 @@ export async function GET(req: NextRequest) {
       where.plannedEnd = { ...where.plannedEnd, lte: new Date(endDate) }
     }
 
+    // Role Visibility Rule: Drafts are private to the creator (and Admin)
+    // Area Owners and Safety Officers must NEVER see DRAFT permits in their permit lists
+    if (user.role === Role.AREA_OWNER || user.role === Role.SAFETY_OFFICER) {
+      where.status = where.status || { not: PermitStatus.DRAFT }
+      if (typeof where.status === "object" && !where.status.not) {
+        // If a specific status was requested, ensure it cannot be DRAFT
+        if (where.status === PermitStatus.DRAFT) {
+          where.status = { in: [] } // Returns nothing if Area Owner or Safety Officer explicitly queries DRAFT
+        }
+      } else if (where.status === PermitStatus.DRAFT) {
+        where.status = { in: [] }
+      }
+    } else if (user.role === Role.REQUESTER) {
+      // Requesters can only see their own drafts; other users' drafts are hidden
+      where.OR = [
+        { status: { not: PermitStatus.DRAFT } },
+        { status: PermitStatus.DRAFT, requesterId: user.userId },
+      ]
+    }
+
     // Role-specific filtering if "pendingMyApproval" requested
     if (pendingMyApproval) {
       where.status = PermitStatus.PENDING_APPROVAL
