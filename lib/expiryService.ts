@@ -1,30 +1,42 @@
+/**
+ * ============================================================================
+ * AUTOMATED EXPIRATION SERVICE
+ * ============================================================================
+ * Enforces hard time limits on work permits. In industrial plants, working
+ * under an expired permit is a severe safety violation.
+ *
+ * This service runs:
+ * 1. Lazily when the permits list or detail is retrieved
+ * 2. On a cron schedule (every 5-15 mins) via /api/cron/expire
+ *
+ * Hard Rule:
+ * Any permit that is ACTIVE or APPROVED whose plannedEnd (or extendedUntil)
+ * is in the past MUST transition immediately to EXPIRED.
+ */
+
 import { prisma } from "./prisma"
 import { PermitStatus } from "@prisma/client"
 import { notifyStub } from "./notifyStub"
 
-/**
- * Lazy Expiry: Checks and automatically transitions expired permits in
- * PENDING_APPROVAL or ACTIVE to EXPIRED.
- * Can be run for a single permit, a list, or the whole database.
- */
-export async function triggerLazyExpiry(permitId?: string): Promise<number> {
+export async function triggerLazyExpiry(): Promise<number> {
   const now = new Date()
 
-  // Find permits that should be expired
-  const whereCondition: any = {
-    status: { in: [PermitStatus.PENDING_APPROVAL, PermitStatus.ACTIVE] },
-    OR: [
-      { extendedUntil: { not: null, lt: now } },
-      { extendedUntil: null, plannedEnd: { lt: now } },
-    ],
-  }
-
-  if (permitId) {
-    whereCondition.id = permitId
-  }
-
+  // Find all open permits whose deadline has passed
   const expiredCandidates = await prisma.permit.findMany({
-    where: whereCondition,
+    where: {
+      status: {
+        in: [PermitStatus.ACTIVE, PermitStatus.APPROVED],
+      },
+      OR: [
+        {
+          extendedUntil: { not: null, lt: now },
+        },
+        {
+          extendedUntil: null,
+          plannedEnd: { lt: now },
+        },
+      ],
+    },
     include: {
       requester: true,
     },
@@ -35,30 +47,33 @@ export async function triggerLazyExpiry(permitId?: string): Promise<number> {
   }
 
   for (const permit of expiredCandidates) {
-    await prisma.$transaction(async (tx) => {
-      await tx.permit.update({
-        where: { id: permit.id },
-        data: { status: PermitStatus.EXPIRED },
-      })
-
-      await tx.auditLog.create({
-        data: {
-          permitId: permit.id,
-          actorId: permit.requesterId, // recorded with system context attributed to requester
-          action: "AUTO_EXPIRED",
-          fromValue: permit.status,
-          toValue: PermitStatus.EXPIRED,
-          comment: `System auto-expiry triggered: validity ended at ${
-            permit.extendedUntil?.toISOString() || permit.plannedEnd.toISOString()
-          }.`,
-        },
-      })
+    // 1. Update status to EXPIRED
+    await prisma.permit.update({
+      where: { id: permit.id },
+      data: { status: PermitStatus.EXPIRED },
     })
 
+    // 2. Add an audit log entry for industrial traceability
+    await prisma.auditLog.create({
+      data: {
+        permitId: permit.id,
+        actorId: permit.requesterId, // System auto-event recorded under permit owner context
+        action: "AUTO_EXPIRED",
+        fromValue: permit.status,
+        toValue: PermitStatus.EXPIRED,
+        comment: `Permit exceeded maximum authorized validity window (${
+          permit.extendedUntil ? "extended" : "planned"
+        } deadline passed). Work must cease immediately.`,
+      },
+    })
+
+    // 3. Notify the requester that work must cease
     notifyStub(
       permit.requester.email,
       `Permit ${permit.permitNumber} Expired`,
-      `Your permit ${permit.permitNumber} has reached its planned validity limit and transitioned to EXPIRED.`
+      `Safety Notice: Work window ended at ${
+        permit.extendedUntil?.toISOString() || permit.plannedEnd.toISOString()
+      }. The permit has been automatically expired.`
     )
   }
 

@@ -1,3 +1,16 @@
+/**
+ * ============================================================================
+ * PERMIT TYPE CONFIGURATION & SCHEMA REGISTRY
+ * ============================================================================
+ * Defines type-specific safety rules, field definitions, standard hazards,
+ * required PPE, precautions checklists, and strict Zod validation schemas
+ * for all 4 industrial permit types:
+ * 1. HOT_WORK (Welding, grinding, cutting, fire watch, gas tests)
+ * 2. CONFINED_SPACE (Tanks, vessels, atmospheric O2/LEL/H2S tests, entry logs)
+ * 3. WORKING_AT_HEIGHT (Scaffolding, harness inspection, wind speed limit)
+ * 4. ELECTRICAL_LOTO (Lockout/Tagout, zero voltage verification, isolation points)
+ */
+
 import { z } from "zod"
 import { PermitType } from "@prisma/client"
 

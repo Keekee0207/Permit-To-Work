@@ -1,5 +1,16 @@
 "use client"
 
+/**
+ * ============================================================================
+ * ADMIN CONTROL PANEL (PLANTS, ZONES, ASSETS & USERS)
+ * ============================================================================
+ * Restricted solely to system Administrators:
+ * 1. Facility Setup: Create and manage Plants (e.g. Chennai, Sriperumbudur).
+ * 2. Area Hierarchy: Partition plants into physical areas/zones.
+ * 3. Asset Registry: Add plant machinery and equipment tag codes.
+ * 4. User Directory: Manage users and assign Area Owners to plant zones.
+ */
+
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ShieldCheck, Plus, Building2, MapPin, Wrench, Users, AlertTriangle } from "lucide-react"

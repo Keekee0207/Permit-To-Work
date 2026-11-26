@@ -1,5 +1,13 @@
 "use client"
 
+/**
+ * ============================================================================
+ * LOGIN & AUTHENTICATION SCREEN
+ * ============================================================================
+ * Provides secure email/password credential sign-in and one-click demo user
+ * selectors for all 4 industrial roles (Requester, Area Owner, Safety Officer, Admin).
+ */
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ShieldCheck, ArrowRight, Lock, Mail } from "lucide-react"
@@ -11,6 +19,7 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
+  // Submits credentials to /api/auth/login to receive HTTP-only JWT cookie
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -37,6 +46,7 @@ export default function LoginPage() {
     }
   }
 
+  // Pre-fills form credentials when clicking any quick demo role button
   const selectDemoUser = (userEmail: string) => {
     setEmail(userEmail)
     setPassword("Password@123")

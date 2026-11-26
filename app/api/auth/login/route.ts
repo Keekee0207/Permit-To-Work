@@ -1,3 +1,11 @@
+/**
+ * ============================================================================
+ * AUTHENTICATION LOGIN ENDPOINT (/api/auth/login)
+ * ============================================================================
+ * Verifies email and salted bcrypt password hash, generates a signed 24h JWT,
+ * and sets an HTTP-only secure cookie in the client browser.
+ */
+
 import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"

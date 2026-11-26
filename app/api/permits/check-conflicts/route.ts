@@ -1,3 +1,11 @@
+/**
+ * ============================================================================
+ * SIMULTANEOUS OPERATIONS (SIMOPS) CONFLICT CHECKER API
+ * ============================================================================
+ * Prevents catastrophic industrial accidents by detecting incompatible
+ * overlapping permits (e.g. Hot Work in an area with active Confined Space entry).
+ */
+
 import { NextRequest, NextResponse } from "next/server"
 import { getSessionUser, unauthorizedResponse } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"

@@ -1,3 +1,18 @@
+// =========================================================================================
+// PRISMA DATA MODEL SCHEMA
+// =========================================================================================
+// Database: PostgreSQL (Neon Serverless Cloud Database)
+// Purpose: Defines industrial PTW (Permit To Work) entities, enums, relations, and indexes.
+//
+// ENTITY OVERVIEW:
+// 1. User & UserArea: Personnel, authentication credentials, roles, and assigned zones.
+// 2. Plant, Area & Equipment: Facility hierarchical master data tree.
+// 3. Permit: The central work authorization entity with lifecycle status, timing, and hazards.
+// 4. PermitApproval: Dual-signoff approval matrix (Area Owner + Safety Officer).
+// 5. ExtensionRequest: Structured audit workflow for extending valid work time windows.
+// 6. AuditLog: Tamper-evident chronological audit trail for industrial safety compliance.
+// =========================================================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,87 +22,104 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// -----------------------------------------------------------------------------------------
+// ENUMS (ROLE-BASED ACCESS & PERMIT LIFECYCLE)
+// -----------------------------------------------------------------------------------------
+
+/// Operational roles governing permissions, approval rights, and navigation access.
 enum Role {
-  REQUESTER
-  AREA_OWNER
-  SAFETY_OFFICER
-  ADMIN
+  REQUESTER       // Contractors & maintenance engineers who raise and execute permits
+  AREA_OWNER      // Plant floor supervisors who authorize localized physical zone safety
+  SAFETY_OFFICER  // HSE specialists who conduct technical and regulatory hazard reviews
+  ADMIN           // System administrators managing users, plants, and master configuration
 }
 
+/// The 4 distinct high-hazard industrial permit classifications.
 enum PermitType {
-  HOT_WORK
-  CONFINED_SPACE
-  WORKING_AT_HEIGHT
-  ELECTRICAL_LOTO
+  HOT_WORK          // Welding, torch cutting, open flames, spark-producing grinding
+  CONFINED_SPACE    // Tanks, vessels, silos, pits with atmospheric hazards or entrapment risk
+  WORKING_AT_HEIGHT // Scaffolding, elevated platforms, roofs, ladders > 1.8 meters
+  ELECTRICAL_LOTO   // Lockout / Tagout, high/low voltage switchgear, de-energization
 }
 
+/// Complete 10-state deterministic permit lifecycle state machine.
 enum PermitStatus {
-  DRAFT
-  PENDING_APPROVAL
-  APPROVED
-  ACTIVE
-  SUSPENDED
-  EXPIRED
-  CLOSED
-  CLOSED_VERIFIED
-  CANCELLED
-  REJECTED
+  DRAFT             // Editable draft saved by the permit requester
+  PENDING_APPROVAL  // Submitted and waiting for Area Owner & Safety Officer dual sign-off
+  APPROVED          // Both required approvals granted; ready for physical field activation
+  ACTIVE            // Work is actively in progress on the shop floor
+  SUSPENDED         // Work temporarily halted due to emergency or environmental hazard
+  EXPIRED           // Authorized work window elapsed without closure
+  CLOSED            // Work finished and surrendered by the contractor / maintenance crew
+  CLOSED_VERIFIED   // Site inspected, housekeeping verified, and formally closed by Area Owner
+  CANCELLED         // Voided prior to activation
+  REJECTED          // Turned down during sign-off review with stated safety rationale
 }
 
+/// Status of an individual role-specific sign-off slot.
 enum ApprovalDecision {
-  PENDING
-  APPROVED
-  REJECTED
+  PENDING   // Awaiting review
+  APPROVED  // Sign-off granted with digital canvas signature
+  REJECTED  // Rejected with safety comment
 }
 
+/// Workflow state for time extension requests.
 enum ExtensionStatus {
-  PENDING
-  APPROVED
-  REJECTED
+  PENDING   // Extension submitted, awaiting Safety Officer review
+  APPROVED  // Extended time window granted
+  REJECTED  // Extension denied; work must stop at original deadline
 }
 
+// -----------------------------------------------------------------------------------------
+// DATA MODELS
+// -----------------------------------------------------------------------------------------
+
+/// User account entity storing credentials, role, and relational references.
 model User {
-  id                String             @id @default(uuid())
-  email             String             @unique
-  name              String
-  passwordHash      String
-  role              Role               @default(REQUESTER)
-  assignedAreas     UserArea[]
-  permitsRequested  Permit[]           @relation("PermitRequester")
-  approvals         PermitApproval[]
-  extensionsRaised  ExtensionRequest[] @relation("ExtensionRequester")
+  id                 String             @id @default(uuid())
+  email              String             @unique
+  name               String
+  passwordHash       String             // Bcrypt encrypted password
+  role               Role               @default(REQUESTER)
+  assignedAreas      UserArea[]         // Areas assigned to this user (for Area Owners)
+  permitsRequested   Permit[]           @relation("PermitRequester")
+  approvals          PermitApproval[]   // Signatures and reviews provided by this user
+  extensionsRaised   ExtensionRequest[] @relation("ExtensionRequester")
   extensionsReviewed ExtensionRequest[] @relation("ExtensionReviewer")
-  auditLogs         AuditLog[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  auditLogs          AuditLog[]         // Audit actions performed by this user
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 }
 
+/// Manufacturing facility or geographic plant complex (e.g. Chennai Plant 1).
 model Plant {
   id        String   @id @default(uuid())
   name      String   @unique
   code      String   @unique
   location  String
-  areas     Area[]
-  permits   Permit[]
+  areas     Area[]   // Functional zones belonging to this plant
+  permits   Permit[] // Permits raised within this plant
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
+/// Specific physical area or operational zone within a plant (e.g. Boiler House).
 model Area {
-  id          String      @id @default(uuid())
-  plantId     String
-  plant       Plant       @relation(fields: [plantId], references: [id], onDelete: Cascade)
-  name        String
-  code        String
-  equipment   Equipment[]
-  permits     Permit[]
-  assignedUsers UserArea[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id            String      @id @default(uuid())
+  plantId       String
+  plant         Plant       @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  name          String
+  code          String
+  equipment     Equipment[] // Tagged machinery located in this area
+  permits       Permit[]    // Permits executed in this area
+  assignedUsers UserArea[]  // Area owners accountable for this zone
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   @@unique([plantId, code])
 }
 
+/// Join table mapping Area Owners to their designated operational areas.
 model UserArea {
   id        String   @id @default(uuid())
   userId    String
@@ -99,11 +131,12 @@ model UserArea {
   @@unique([userId, areaId])
 }
 
+/// Individual physical piece of equipment or machinery (e.g. Boiler #1, Pump P-204).
 model Equipment {
   id          String   @id @default(uuid())
   areaId      String
   area        Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
-  tagCode     String   @unique
+  tagCode     String   @unique // Unique industrial asset tag code
   name        String
   description String?
   permits     Permit[]
@@ -111,47 +144,49 @@ model Equipment {
   updatedAt   DateTime @updatedAt
 }
 
+/// Central Permit To Work entity containing scheduling, hazards, and JSON metadata.
 model Permit {
-  id                   String           @id @default(uuid())
-  permitNumber         String           @unique
+  id                   String             @id @default(uuid())
+  permitNumber         String             @unique // Human-readable identifier: e.g. PTW-2024-XXXX
   type                 PermitType
-  status               PermitStatus     @default(DRAFT)
+  status               PermitStatus       @default(DRAFT)
   requesterId          String
-  requester            User             @relation("PermitRequester", fields: [requesterId], references: [id])
-  contractorTeam       String
-  workDescription      String
+  requester            User               @relation("PermitRequester", fields: [requesterId], references: [id])
+  contractorTeam       String             // Maintenance agency or internal crew name
+  workDescription      String             // Detailed scope of work
   plantId              String
-  plant                Plant            @relation(fields: [plantId], references: [id])
+  plant                Plant              @relation(fields: [plantId], references: [id])
   areaId               String
-  area                 Area             @relation(fields: [areaId], references: [id])
+  area                 Area               @relation(fields: [areaId], references: [id])
   equipmentId          String?
-  equipment            Equipment?       @relation(fields: [equipmentId], references: [id])
-  plannedStart         DateTime
-  plannedEnd           DateTime
-  extendedUntil        DateTime?
-  hazards              String[]         @default([])
-  ppeRequired          String[]         @default([])
-  precautionsChecklist Json             @default("[]")
-  typeSpecificData     Json             @default("{}")
-  completionNotes      String?
-  photoUrl             String?
-  approvals            PermitApproval[]
-  extensions           ExtensionRequest[]
-  auditLogs            AuditLog[]
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  equipment            Equipment?         @relation(fields: [equipmentId], references: [id])
+  plannedStart         DateTime           // Authorized window start
+  plannedEnd           DateTime           // Authorized window end
+  extendedUntil        DateTime?          // Updated expiry if an extension is approved
+  hazards              String[]           @default([]) // Identified hazards checklist
+  ppeRequired          String[]           @default([]) // Mandatory personal protective equipment
+  precautionsChecklist Json               @default("[]") // Safety precautions answered true/false
+  typeSpecificData     Json               @default("{}") // Gas tests, LOTO tags, fall clearance, etc.
+  completionNotes      String?            // Handover notes upon completion
+  photoUrl             String?            // Optional housekeeping/isolation photo attachment
+  approvals            PermitApproval[]   // Dual sign-off records
+  extensions           ExtensionRequest[] // History of extension requests
+  auditLogs            AuditLog[]         // Full audit trail of all lifecycle events
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 }
 
+/// Digital sign-off records representing the dual approval requirement.
 model PermitApproval {
   id               String           @id @default(uuid())
   permitId         String
   permit           Permit           @relation(fields: [permitId], references: [id], onDelete: Cascade)
-  requiredRole     Role
+  requiredRole     Role             // AREA_OWNER or SAFETY_OFFICER
   approverId       String?
   approver         User?            @relation(fields: [approverId], references: [id])
   decision         ApprovalDecision @default(PENDING)
-  comment          String?
-  signatureDataUrl String?
+  comment          String?          // Required if rejected; optional if approved
+  signatureDataUrl String?          // Base64 PNG digital canvas signature
   reviewedAt       DateTime?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -159,32 +194,34 @@ model PermitApproval {
   @@unique([permitId, requiredRole])
 }
 
+/// Time extension request raised when hazardous maintenance runs beyond original plannedEnd.
 model ExtensionRequest {
   id             String          @id @default(uuid())
   permitId       String
   permit         Permit          @relation(fields: [permitId], references: [id], onDelete: Cascade)
   requestedById  String
   requestedBy    User            @relation("ExtensionRequester", fields: [requestedById], references: [id])
-  requestedHours Int
-  reason         String
+  requestedHours Int             // Additional hours requested (e.g., 2, 4)
+  reason         String          // Technical rationale for extension
   status         ExtensionStatus @default(PENDING)
   reviewedById   String?
   reviewedBy     User?           @relation("ExtensionReviewer", fields: [reviewedById], references: [id])
-  comment        String?
+  comment        String?         // Reviewer's feedback
   reviewedAt     DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
 
+/// Immutable, chronological audit record for industrial compliance and safety inspection.
 model AuditLog {
   id        String   @id @default(uuid())
   permitId  String
   permit    Permit   @relation(fields: [permitId], references: [id], onDelete: Cascade)
   actorId   String
   actor     User     @relation(fields: [actorId], references: [id])
-  action    String
-  fromValue String?
-  toValue   String?
-  comment   String?
+  action    String   // e.g. CREATED, SUBMITTED, APPROVED, ACTIVATED, EXPIRED
+  fromValue String?  // Previous state or timestamp
+  toValue   String?  // New state or timestamp
+  comment   String?  // Human note or automated trigger explanation
   createdAt DateTime @default(now())
 }

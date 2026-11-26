@@ -1,3 +1,38 @@
+/**
+ * =========================================================================================
+ * PERMIT STATE MACHINE & INDUSTRIAL RBAC TEST SUITE
+ * =========================================================================================
+ * Path: test/stateMachine.test.ts
+ * Execution: npm test (via Vitest)
+ *
+ * PURPOSE & COMPLIANCE VERIFICATION:
+ * Rigorously validates all deterministic state transitions and industrial safety invariants:
+ *
+ * TEST COVERAGE:
+ * 1. Draft Submission:
+ *    - Requesters can submit their own drafts.
+ *    - Intruders/non-requesters cannot submit drafts belonging to someone else.
+ * 2. Self-Approval Ban (Strictly Enforced across all roles):
+ *    - Safety Officers CANNOT approve permits they requested.
+ *    - Area Owners CANNOT approve permits they requested.
+ *    - Admins CANNOT approve permits they requested.
+ * 3. Area Ownership Validation:
+ *    - An Area Owner can ONLY approve permits inside their designated plant area.
+ * 4. Dual Approval Resolution:
+ *    - 1 of 2 approved remains PENDING_APPROVAL.
+ *    - 2 of 2 approved transitions to APPROVED.
+ *    - Single rejection immediately transitions permit to REJECTED.
+ * 5. Work Activation & Pre-Conditions:
+ *    - Activation requires status APPROVED, physical site checks confirmed, and non-expired time.
+ *    - Gas test requirement for Hot Work and Confined Space before activation.
+ * 6. Work Completion, Verification & Closure:
+ *    - Field crew marks COMPLETE -> CLOSED.
+ *    - Area Owner performs physical site verification -> CLOSED_VERIFIED.
+ * 7. Automatic Expiration & Invalidation:
+ *    - Time-exceeded active permits are correctly identified by isPermitExpired().
+ * =========================================================================================
+ */
+
 import { describe, it, expect } from "vitest"
 import { PermitStateMachine, isPermitExpired } from "../lib/permitStateMachine"
 import { Role, PermitStatus, ApprovalDecision, PermitType } from "@prisma/client"

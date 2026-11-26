@@ -1,3 +1,11 @@
+/**
+ * ============================================================================
+ * CURRENT SESSION & LOGOUT ENDPOINT (/api/auth/me)
+ * ============================================================================
+ * GET  - Inspects auth cookie and returns the active user session.
+ * POST - Clears the session cookie to securely log out the user.
+ */
+
 import { NextRequest, NextResponse } from "next/server"
 import { AUTH_COOKIE_NAME, getSessionUser } from "@/lib/auth"
 

@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!user) return unauthorizedResponse()
 
     // Ensure expired permits are lazily flagged before running action
-    await triggerLazyExpiry(params.id)
+    await triggerLazyExpiry()
 
     const permit = await prisma.permit.findUnique({
       where: { id: params.id },

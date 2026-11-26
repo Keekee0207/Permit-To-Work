@@ -1,3 +1,11 @@
+/**
+ * ============================================================================
+ * SINGLE PERMIT RESOURCE API (/api/permits/[id])
+ * ============================================================================
+ * GET - Fetches single permit details, hierarchy, approvals, and audit trail.
+ * PUT - Updates an editable private draft prior to formal submission.
+ */
+
 import { NextRequest, NextResponse } from "next/server"
 import { getSessionUser, unauthorizedResponse } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
@@ -10,8 +18,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const user = await getSessionUser(req)
     if (!user) return unauthorizedResponse()
 
-    // Trigger lazy expiry for this specific permit first
-    await triggerLazyExpiry(params.id)
+    // Trigger lazy expiry across the system first
+    await triggerLazyExpiry()
 
     const permit = await prisma.permit.findUnique({
       where: { id: params.id },

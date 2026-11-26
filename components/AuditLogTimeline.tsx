@@ -1,3 +1,11 @@
+/**
+ * ============================================================================
+ * IMMUTABLE AUDIT LOG TIMELINE COMPONENT
+ * ============================================================================
+ * Visual vertical timeline showing every historical event and state mutation
+ * in a permit's lifecycle (submission, approvals, suspensions, closures).
+ */
+
 import { AuditLog } from "@prisma/client"
 import { CheckCircle2, Clock, AlertTriangle, XCircle, Shield, FileText, UserCheck } from "lucide-react"
 
@@ -10,6 +18,7 @@ export function AuditLogTimeline({ logs }: AuditLogTimelineProps) {
     return <div className="text-xs text-slate-500 py-4">No audit logs recorded yet.</div>
   }
 
+  // Returns appropriate contextual icon per audit action type
   const getActionBadge = (action: string) => {
     switch (action) {
       case "SUBMITTED":

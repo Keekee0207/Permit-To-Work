@@ -1,20 +1,36 @@
+/**
+ * =========================================================================================
+ * NEON SERVERLESS POSTGRESQL CONFIGURATION
+ * =========================================================================================
+ * Path: neon.ts
+ *
+ * PURPOSE:
+ * Configures branch policies and database options for Neon Serverless PostgreSQL.
+ * Neon provides instant database branching, allowing ephemeral development/staging
+ * branches that mirror production data schemas without additional compute costs.
+ *
+ * BRANCH POLICIES:
+ * - Default branch (production `neondb`): No overrides; keeps persistent long-term storage.
+ * - Ephemeral non-default preview branches: Automatically expire with a 7-day TTL (`ttl: "7d"`).
+ * =========================================================================================
+ */
+
 import { defineConfig } from "@neon/config/v1";
 
 export default defineConfig({
-  // Declare your Neon services here
+  // Built-in Neon Auth disabled (using custom Jose JWT cookie authentication)
   auth: false,
-  // Branch policy: per-branch tuning
+
+  // Branch lifecycle management
   branch: (branch) => {
     if (branch.isDefault) {
-      // Default branch: no overrides, uses project defaults
+      // Production primary branch: persistent
       return {};
     }
     if (!branch.exists) {
-      // New non-default branches: auto-expire
-      // Run `neon checkout <name>` to create a new branch with these settings
+      // Automatically expire temporary review/feature branches after 7 days
       return { ttl: "7d" };
     }
-    // Existing branch: no changes
     return {};
   },
 });

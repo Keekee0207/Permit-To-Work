@@ -1,3 +1,11 @@
+/**
+ * ============================================================================
+ * NOTIFICATION SERVICE STUB
+ * ============================================================================
+ * Provides an extensible interface for dispatching real-time notifications
+ * (SMS, Email, Push alerts) to plant personnel, supervisors, and contractors.
+ */
+
 export interface NotificationRecipient {
   userId?: string
   email?: string
@@ -5,6 +13,9 @@ export interface NotificationRecipient {
   role?: string
 }
 
+/**
+ * Dispatches an alert message to a recipient and outputs an audit log entry
+ */
 export function notifyStub(
   recipient: NotificationRecipient | string,
   subject: string,

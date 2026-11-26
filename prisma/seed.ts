@@ -1,3 +1,32 @@
+/**
+ * =========================================================================================
+ * INDUSTRIAL PTW DATABASE SEED SCRIPT
+ * =========================================================================================
+ * Path: prisma/seed.ts
+ * Execution: npx prisma db seed
+ *
+ * PURPOSE:
+ * Populates the PostgreSQL database with realistic initial demo master data:
+ * 1. Demo User Accounts:
+ *    - Requester (Rajesh Kumar - requester@chennai.opmaint.com)
+ *    - Area Owner (M. Senthil - areaowner@chennai.opmaint.com)
+ *    - Safety Officer (K. Radhakrishnan - safety@chennai.opmaint.com)
+ *    - Administrator (Pooja Nair - admin@chennai.opmaint.com)
+ *    - Standard password across demo accounts: `Password@123`
+ * 2. Plants & Manufacturing Complexes:
+ *    - Chennai Heavy Engineering Plant 1 (Ambattur Industrial Estate)
+ *    - Sriperumbudur Auto-Component Plant 2 (SIPCOT Industrial Park)
+ * 3. Functional Areas & Tagged Equipment:
+ *    - Boiler & Steam Utility Area (Boiler #1, Feed Pump P-101A)
+ *    - Solvent Reaction Vessel Bay (Reactor R-201, Distillation Column C-102)
+ *    - High Voltage Substation & MCC Room (415V MCC-A, 11kV Transformer TR-01)
+ *    - Press Shop & Stamping Bay (500T Hydraulic Press, Overhead Crane CR-05)
+ * 4. Realistic Demonstration Permits:
+ *    - Pre-seeded permits representing various lifecycle states (DRAFT, PENDING_APPROVAL,
+ *      ACTIVE, APPROVED, EXPIRED) across all 4 permit types.
+ * =========================================================================================
+ */
+
 import { PrismaClient, Role, PermitType, PermitStatus, ApprovalDecision, ExtensionStatus } from "@prisma/client"
 import bcrypt from "bcryptjs"
 

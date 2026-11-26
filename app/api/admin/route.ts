@@ -1,3 +1,12 @@
+/**
+ * ============================================================================
+ * ADMIN MASTER DATA MANAGEMENT API (/api/admin)
+ * ============================================================================
+ * Provides CRUD capabilities for enterprise assets and facilities:
+ * GET  - Fetches plants, zones, equipment, and user directory.
+ * POST - Provisions new plants, zones, equipment, and securely hashes user passwords.
+ */
+
 import { NextRequest, NextResponse } from "next/server"
 import { getSessionUser, unauthorizedResponse, forbiddenResponse } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"

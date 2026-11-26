@@ -1,5 +1,14 @@
 "use client"
 
+/**
+ * ============================================================================
+ * DIGITAL SIGNATURE CANVAS COMPONENT
+ * ============================================================================
+ * Touch-screen and mouse-friendly HTML5 Canvas allowing Area Owners and
+ * Safety Officers to digitally sign approvals on mobile tablets or desktop.
+ * Exports high-resolution base64 PNG data URLs stored directly in PostgreSQL.
+ */
+
 import { useEffect, useRef, useState } from "react"
 
 interface SignatureCanvasProps {
@@ -12,6 +21,7 @@ export function SignatureCanvas({ onSave, onClear }: SignatureCanvasProps) {
   const [isDrawing, setIsDrawing] = useState(false)
   const [hasDrawn, setHasDrawn] = useState(false)
 
+  // Configure pen stroke styles on canvas context
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -24,6 +34,7 @@ export function SignatureCanvas({ onSave, onClear }: SignatureCanvasProps) {
     ctx.lineJoin = "round"
   }, [])
 
+  // Touch & Mouse Event Handlers for smooth drawing
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     setIsDrawing(true)
     const canvas = canvasRef.current
@@ -59,9 +70,9 @@ export function SignatureCanvas({ onSave, onClear }: SignatureCanvasProps) {
     if (!isDrawing) return
     setIsDrawing(false)
     const canvas = canvasRef.current
-    if (canvas && hasDrawn) {
-      onSave(canvas.toDataURL("image/png"))
-    }
+    if (!canvas) return
+    // Automatically export signature image as base64 data URL
+    onSave(canvas.toDataURL("image/png"))
   }
 
   const handleClear = () => {

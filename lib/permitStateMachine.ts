@@ -1,3 +1,15 @@
+/**
+ * ============================================================================
+ * PERMIT LIFECYCLE FINITE STATE MACHINE (FSM)
+ * ============================================================================
+ * Implements deterministic transition rules, role-based signing rules,
+ * non-self-approval enforcement, and state validation across all 8 permit states:
+ * 
+ * DRAFT -> PENDING_APPROVAL -> APPROVED -> ACTIVE -> SUSPENDED -> ACTIVE -> CLOSED -> CLOSED_VERIFIED
+ *   |               |            |         |            |
+ *   +---------------+------------+---------+------------+---> CANCELLED / EXPIRED
+ */
+
 import { Permit, PermitStatus, Role, ApprovalDecision, PermitApproval, User, Area, ExtensionRequest, AuditLog } from "@prisma/client"
 import { notifyStub } from "./notifyStub"
 
