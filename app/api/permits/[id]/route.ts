@@ -49,6 +49,15 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: "Permit not found" }, { status: 404 })
     }
 
+    // Strict Privacy Rule: DRAFT permits can ONLY be viewed by their creator
+    // Even Admins, Area Owners, and Safety Officers cannot access someone else's draft
+    if (permit.status === PermitStatus.DRAFT && permit.requesterId !== user.userId) {
+      return NextResponse.json(
+        { error: "Access denied. Draft permits are private to the creator until submitted." },
+        { status: 403 }
+      )
+    }
+
     return NextResponse.json({ permit })
   } catch (err: any) {
     console.error("Get permit error:", err)

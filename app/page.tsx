@@ -326,8 +326,8 @@ export default function DashboardPage() {
             className="min-h-[40px] px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
           >
             <option value="ALL">All Statuses</option>
-            {(currentUser?.role === "REQUESTER" || currentUser?.role === "ADMIN") && (
-              <option value="DRAFT">Draft</option>
+            {currentUser?.role === "REQUESTER" && (
+              <option value="DRAFT">My Drafts</option>
             )}
             <option value="PENDING_APPROVAL">Pending Approval</option>
             <option value="APPROVED">Approved</option>
