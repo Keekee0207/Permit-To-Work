@@ -18,6 +18,7 @@ import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { PERMIT_TYPE_REGISTRY, PermitTypeDefinition } from "@/lib/permitTypeConfig"
 import { PermitType } from "@prisma/client"
+import { getCachedPlants, setCachedPlants } from "@/lib/plantCache"
 import { 
   ShieldAlert, 
   ArrowLeft, 
@@ -107,8 +108,18 @@ function PermitFormContent() {
     }
   }, [selectedType])
 
-  // Load plants hierarchy and current user
+  // Load plants hierarchy and current user (uses instant cache when available)
   useEffect(() => {
+    // Check if plants are already cached in memory from dashboard
+    const cached = getCachedPlants()
+    if (cached && cached.length > 0) {
+      setPlants(cached)
+      if (!plantId) setPlantId(cached[0].id)
+      if (!areaId && cached[0].areas?.length > 0) {
+        setAreaId(cached[0].areas[0].id)
+      }
+    }
+
     Promise.all([
       fetch("/api/auth/me").then((res) => res.json()),
       fetch("/api/plants").then((res) => res.json()),
@@ -128,10 +139,11 @@ function PermitFormContent() {
         setCurrentUser(userData.user)
 
         const plantList = plantData.plants || []
-        setPlants(plantList)
         if (plantList.length > 0) {
-          setPlantId(plantList[0].id)
-          if (plantList[0].areas.length > 0) {
+          setCachedPlants(plantList)
+          setPlants(plantList)
+          if (!plantId) setPlantId(plantList[0].id)
+          if (!areaId && plantList[0].areas?.length > 0) {
             setAreaId(plantList[0].areas[0].id)
           }
         }
@@ -169,28 +181,38 @@ function PermitFormContent() {
       })
   }, [])
 
-  // Auto conflict checking when type, area, plannedStart or plannedEnd changes
+  // Auto conflict checking when type, area, plannedStart or plannedEnd changes (debounced)
   useEffect(() => {
+    // Only HOT_WORK and CONFINED_SPACE can trigger SIMOPS conflicts
+    if (selectedType !== "HOT_WORK" && selectedType !== "CONFINED_SPACE") {
+      setConflicts([])
+      return
+    }
+
     if (!areaId || !plannedStart || !plannedEnd) return
 
-    setCheckingConflict(true)
-    fetch("/api/permits/check-conflicts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: selectedType,
-        plantId,
-        areaId,
-        plannedStart,
-        plannedEnd,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setConflicts(data.conflicts || [])
+    const timer = setTimeout(() => {
+      setCheckingConflict(true)
+      fetch("/api/permits/check-conflicts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: selectedType,
+          plantId,
+          areaId,
+          plannedStart,
+          plannedEnd,
+        }),
       })
-      .catch(() => {})
-      .finally(() => setCheckingConflict(false))
+        .then((res) => res.json())
+        .then((data) => {
+          setConflicts(data.conflicts || [])
+        })
+        .catch(() => {})
+        .finally(() => setCheckingConflict(false))
+    }, 250)
+
+    return () => clearTimeout(timer)
   }, [selectedType, areaId, plannedStart, plannedEnd])
 
   const currentPlant = plants.find((p) => p.id === plantId)

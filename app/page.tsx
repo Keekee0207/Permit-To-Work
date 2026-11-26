@@ -18,6 +18,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { StatusBadge } from "@/components/StatusBadge"
+import { setCachedPlants } from "@/lib/plantCache"
 import { 
   Clock, 
   AlertTriangle, 
@@ -116,10 +117,11 @@ export default function DashboardPage() {
   // --------------------------------------------------------------------------
   const loadData = async () => {
     try {
-      // Fetch authenticated user profile & plant hierarchy in parallel
-      const [userRes, plantsRes] = await Promise.all([
+      // Parallelize all 3 requests: user profile, plant hierarchy, and permits list
+      const [userRes, plantsRes, permitsRes] = await Promise.all([
         fetch("/api/auth/me"),
         fetch("/api/plants"),
+        fetch("/api/permits"),
       ])
       const userData = await userRes.json()
       if (!userData.user) {
@@ -128,21 +130,20 @@ export default function DashboardPage() {
       }
       setCurrentUser(userData.user)
 
-      // Flatten plants and their sub-areas for the Area Filter dropdown
+      // Flatten plants and cache them for instant transitions to /permits/new
       const plantsData = await plantsRes.json()
-      const areasList: any[] = []
       if (plantsData.plants) {
+        setCachedPlants(plantsData.plants)
+        const areasList: any[] = []
         plantsData.plants.forEach((pl: any) => {
           if (pl.areas) {
             pl.areas.forEach((a: any) => areasList.push({ ...a, plantName: pl.name }))
           }
         })
+        setAvailableAreas(areasList)
       }
-      setAvailableAreas(areasList)
 
-      // Fetch visible permits (respecting role-based privacy rules on backend)
-      const res = await fetch("/api/permits")
-      const data = await res.json()
+      const data = await permitsRes.json()
       setPermits(data.permits || [])
     } catch (err) {
       console.error(err)
@@ -397,6 +398,7 @@ export default function DashboardPage() {
           {(currentUser?.role === "REQUESTER" || currentUser?.role === "ADMIN") && (
             <Link
               href="/permits/new"
+              prefetch={true}
               className="min-h-[48px] px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-xs transition"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />

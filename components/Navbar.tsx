@@ -35,7 +35,7 @@ export function Navbar() {
   const handleLogout = async () => {
     await fetch("/api/auth/me", { method: "POST" })
     setCurrentUser(null)
-    router.push("/login")
+    window.location.href = "/login"
   }
 
   // Quick switch role utility (for field testing and demoing permissions)

@@ -2,7 +2,8 @@
  * ============================================================================
  * AUTHENTICATION LOGIN ENDPOINT (/api/auth/login)
  * ============================================================================
- * Verifies email and salted bcrypt password hash, generates a signed 24h JWT,
+ * Verifies email and salted bcrypt password hash, generates a signed 24h JWT
+ * containing identity and assignedAreaIds (eliminating future DB lookups),
  * and sets an HTTP-only secure cookie in the client browser.
  */
 
@@ -10,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { signToken, AUTH_COOKIE_NAME } from "@/lib/auth"
+import { Role } from "@prisma/client"
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,8 +21,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
+    const cleanEmail = email.toLowerCase().trim()
+
+    // Optimized select: retrieve only needed fields
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: cleanEmail },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        passwordHash: true,
+      },
     })
 
     if (!user) {
@@ -32,11 +44,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
+    // Preload assignedAreaIds into the JWT so subsequent API calls don't query the DB
+    let assignedAreaIds: string[] = []
+    if (user.role === Role.AREA_OWNER || user.role === Role.ADMIN) {
+      const userAreas = await prisma.userArea.findMany({
+        where: { userId: user.id },
+        select: { areaId: true },
+      })
+      assignedAreaIds = userAreas.map((ua) => ua.areaId)
+    }
+
     const token = await signToken({
       userId: user.id,
       email: user.email,
       role: user.role,
       name: user.name,
+      assignedAreaIds,
     })
 
     const response = NextResponse.json({
@@ -46,6 +69,7 @@ export async function POST(req: NextRequest) {
         email: user.email,
         name: user.name,
         role: user.role,
+        assignedAreaIds,
       },
     })
 

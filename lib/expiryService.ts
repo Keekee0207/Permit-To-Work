@@ -6,7 +6,7 @@
  * under an expired permit is a severe safety violation.
  *
  * This service runs:
- * 1. Lazily when the permits list or detail is retrieved
+ * 1. Lazily when the permits list or detail is retrieved (throttled to max 1x / 30s)
  * 2. On a cron schedule (every 5-15 mins) via /api/cron/expire
  *
  * Hard Rule:
@@ -18,7 +18,16 @@ import { prisma } from "./prisma"
 import { PermitStatus } from "@prisma/client"
 import { notifyStub } from "./notifyStub"
 
-export async function triggerLazyExpiry(): Promise<number> {
+let lastLazyExpiryRun = 0
+
+export async function triggerLazyExpiry(force: boolean = false): Promise<number> {
+  const nowMs = Date.now()
+  // Throttle to avoid repeated table scans on every rapid API call
+  if (!force && nowMs - lastLazyExpiryRun < 30_000) {
+    return 0
+  }
+  lastLazyExpiryRun = nowMs
+
   const now = new Date()
 
   // Find all open permits whose deadline has passed
@@ -70,10 +79,8 @@ export async function triggerLazyExpiry(): Promise<number> {
     // 3. Notify the requester that work must cease
     notifyStub(
       permit.requester.email,
-      `Permit ${permit.permitNumber} Expired`,
-      `Safety Notice: Work window ended at ${
-        permit.extendedUntil?.toISOString() || permit.plannedEnd.toISOString()
-      }. The permit has been automatically expired.`
+      `[AUTO-EXPIRED] Permit ${permit.permitNumber} has Expired`,
+      `Safety Notice: Work under Permit ${permit.permitNumber} must stop immediately as the authorized validity window has ended.`
     )
   }
 

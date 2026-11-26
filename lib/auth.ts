@@ -26,6 +26,7 @@ export interface JWTPayloadData {
   email: string
   role: Role
   name: string
+  assignedAreaIds?: string[]
 }
 
 /**
@@ -54,6 +55,7 @@ export async function verifyToken(token: string): Promise<JWTPayloadData | null>
 /**
  * Server Component Helper: Reads the auth cookie and returns the active user
  * along with their authorized plant area assignments.
+ * Optimized: Uses in-token assignedAreaIds if present, avoiding redundant DB queries.
  */
 export async function getCurrentUserFromCookie(): Promise<(JWTPayloadData & { assignedAreaIds: string[] }) | null> {
   const cookieStore = cookies()
@@ -63,9 +65,8 @@ export async function getCurrentUserFromCookie(): Promise<(JWTPayloadData & { as
   const data = await verifyToken(token)
   if (!data) return null
 
-  // Fetch fresh assigned area IDs for Area Owners & Admins from the database
-  let assignedAreaIds: string[] = []
-  if (data.role === Role.AREA_OWNER || data.role === Role.ADMIN) {
+  let assignedAreaIds: string[] = data.assignedAreaIds || []
+  if (!data.assignedAreaIds && (data.role === Role.AREA_OWNER || data.role === Role.ADMIN)) {
     const userAreas = await prisma.userArea.findMany({
       where: { userId: data.userId },
       select: { areaId: true },
@@ -82,6 +83,7 @@ export async function getCurrentUserFromCookie(): Promise<(JWTPayloadData & { as
 /**
  * API Route Handler Helper: Inspects incoming HTTP requests, validates the
  * session cookie, and resolves the user identity and assigned plant zones.
+ * Optimized: Zero-database query overhead when assignedAreaIds is present in token.
  */
 export async function getSessionUser(req: NextRequest): Promise<(JWTPayloadData & { assignedAreaIds: string[] }) | null> {
   const token = req.cookies.get(AUTH_COOKIE_NAME)?.value
@@ -90,8 +92,8 @@ export async function getSessionUser(req: NextRequest): Promise<(JWTPayloadData 
   const data = await verifyToken(token)
   if (!data) return null
 
-  let assignedAreaIds: string[] = []
-  if (data.role === Role.AREA_OWNER || data.role === Role.ADMIN) {
+  let assignedAreaIds: string[] = data.assignedAreaIds || []
+  if (!data.assignedAreaIds && (data.role === Role.AREA_OWNER || data.role === Role.ADMIN)) {
     const userAreas = await prisma.userArea.findMany({
       where: { userId: data.userId },
       select: { areaId: true },

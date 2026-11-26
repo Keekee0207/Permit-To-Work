@@ -3,23 +3,19 @@
  * PRISMA ORM CLIENT SINGLETON
  * ============================================================================
  * Ensures a single shared PrismaClient instance is reused across hot reloads
- * in development, preventing connection pool exhaustion on PostgreSQL (Neon).
+ * in development and warm lambda container executions on Vercel serverless,
+ * preventing connection pool exhaustion and reconnection latency on PostgreSQL (Neon).
  */
 
 import { PrismaClient } from "@prisma/client"
 
-declare global {
-  // Global reference attached to NodeJS global scope
-  var prisma: PrismaClient | undefined
-}
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined }
 
 export const prisma =
-  global.prisma ||
+  globalForPrisma.prisma ??
   new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   })
 
-// In development, preserve the client on globalThis to avoid recreating on each code reload
-if (process.env.NODE_ENV !== "production") {
-  global.prisma = prisma
-}
+// Preserve client on globalThis across all environments (both dev hot-reload & serverless warm lambdas)
+globalForPrisma.prisma = prisma

@@ -35,13 +35,13 @@ export default function LoginPage() {
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || "Login failed")
+        setLoading(false)
       } else {
-        router.push("/")
-        router.refresh()
+        // Instant clean navigation with cookie active
+        window.location.href = "/"
       }
     } catch (err: any) {
       setError("Network error. Please try again.")
-    } finally {
       setLoading(false)
     }
   }
