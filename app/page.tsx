@@ -294,6 +294,41 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Quick Permit Type Navigation Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {[
+          { id: "ALL", label: "All Permits", icon: null, count: permits.length },
+          { id: "HOT_WORK", label: "Hot Work", icon: Flame, count: permits.filter(p => p.type === "HOT_WORK").length, activeColor: "bg-amber-600 text-white border-amber-600" },
+          { id: "CONFINED_SPACE", label: "Confined Space", icon: Box, count: permits.filter(p => p.type === "CONFINED_SPACE").length, activeColor: "bg-purple-600 text-white border-purple-600" },
+          { id: "WORKING_AT_HEIGHT", label: "Height Work", icon: ArrowUpRight, count: permits.filter(p => p.type === "WORKING_AT_HEIGHT").length, activeColor: "bg-blue-600 text-white border-blue-600" },
+          { id: "ELECTRICAL_LOTO", label: "Electrical LOTO", icon: Zap, count: permits.filter(p => p.type === "ELECTRICAL_LOTO").length, activeColor: "bg-red-600 text-white border-red-600" },
+        ].map((tab) => {
+          const isSelected = selectedType === tab.id
+          const Icon = tab.icon
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setSelectedType(tab.id)}
+              className={`min-h-[42px] px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition shrink-0 shadow-xs ${
+                isSelected
+                  ? tab.activeColor || "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+              }`}
+            >
+              {Icon && <Icon className={`w-3.5 h-3.5 ${isSelected ? "text-white" : "text-slate-500"}`} />}
+              <span>{tab.label}</span>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+                  isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {tab.count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* Filter and Search Bar */}
       <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-[240px]">
