@@ -15,8 +15,12 @@ import { getPermitTypeConfig } from "@/lib/permitTypeConfig"
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const { searchParams } = new URL(req.url)
+    const isScan = searchParams.get("scan") === "true"
     const user = await getSessionUser(req)
-    if (!user) return unauthorizedResponse()
+
+    // Normal access requires login; Field QR scan mode allows read-only access for verified permits
+    if (!user && !isScan) return unauthorizedResponse()
 
     // Trigger lazy expiry across the system first
     await triggerLazyExpiry()
@@ -59,7 +63,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     // Strict Privacy Rule: DRAFT permits can ONLY be viewed by their creator
     // Even Admins, Area Owners, and Safety Officers cannot access someone else's draft
-    if (permit.status === PermitStatus.DRAFT && permit.requesterId !== user.userId) {
+    if (permit.status === PermitStatus.DRAFT && (!user || permit.requesterId !== user.userId)) {
       return NextResponse.json(
         { error: "Access denied. Draft permits are private to the creator until submitted." },
         { status: 403 }

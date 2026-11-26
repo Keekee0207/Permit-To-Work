@@ -77,26 +77,41 @@ export default function PermitDetailPage() {
   const [entryPersonName, setEntryPersonName] = useState("")
   const [entryBadgeNumber, setEntryBadgeNumber] = useState("")
 
+  // Field safety scan mode state (when accessed via physical QR code scan)
+  const [isScanMode, setIsScanMode] = useState(false)
+
   // --------------------------------------------------------------------------
   // DATA FETCHING & QR CODE GENERATION
   // --------------------------------------------------------------------------
   const loadPermit = async () => {
     try {
+      let isScan = false
+      if (typeof window !== "undefined") {
+        const urlParams = new URLSearchParams(window.location.search)
+        isScan = urlParams.get("scan") === "true"
+        if (isScan) {
+          setIsScanMode(true)
+        }
+      }
+
       const [uRes, pRes] = await Promise.all([
         fetch("/api/auth/me").then((r) => r.json()),
-        fetch(`/api/permits/${permitId}`).then((r) => r.json()),
+        fetch(`/api/permits/${permitId}${isScan ? "?scan=true" : ""}`).then((r) => r.json()),
       ])
 
-      if (!uRes.user) {
+      // If not logged in and not in scan mode, redirect to login
+      if (!uRes.user && !isScan) {
         router.push("/login")
         return
       }
-      setCurrentUser(uRes.user)
+      if (uRes.user) {
+        setCurrentUser(uRes.user)
+      }
       setPermit(pRes.permit)
 
-      // Generate dynamic QR Code for instant physical verification on shop floor
-      const currentUrl = window.location.href
-      const qrData = await QRCode.toDataURL(currentUrl, { width: 180, margin: 1 })
+      // Generate dynamic QR Code pointing to scan mode for instant physical verification on shop floor
+      const scanUrl = `${window.location.origin}/permits/${permitId}?scan=true`
+      const qrData = await QRCode.toDataURL(scanUrl, { width: 180, margin: 1 })
       setQrCodeUrl(qrData)
     } catch (err: any) {
       setError(err.message || "Failed to load permit")
@@ -427,145 +442,200 @@ export default function PermitDetailPage() {
               <img src={qrCodeUrl} alt="Permit QR Code" className="w-28 h-28 mix-blend-multiply" />
             )}
             <span className="text-[10px] text-slate-500 font-mono mt-1">Scan for Field Status</span>
+            <button
+              type="button"
+              onClick={() => {
+                const nextMode = !isScanMode
+                setIsScanMode(nextMode)
+                const url = new URL(window.location.href)
+                if (nextMode) {
+                  url.searchParams.set("scan", "true")
+                } else {
+                  url.searchParams.delete("scan")
+                }
+                window.history.replaceState({}, "", url.toString())
+              }}
+              className="mt-1.5 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+            >
+              {isScanMode ? "Exit Scan View" : "Preview Scan View"}
+            </button>
           </div>
         </div>
 
-        {/* Action Controls Bar (Only render allowed actions for user role & state) */}
-        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            Available Actions
+        {/* Scan Mode Read-Only Field Verification Banner */}
+        {isScanMode ? (
+          <div className="bg-blue-50/95 border-2 border-blue-400 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-blue-950 shadow-xs animate-in fade-in duration-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <QrCode className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-blue-900 font-mono bg-blue-200 px-2 py-0.5 rounded">
+                    Field Inspection Scan Mode
+                  </span>
+                  <span className="text-[11px] font-semibold text-blue-700 bg-white border border-blue-200 px-1.5 py-0.2 rounded">
+                    Read-Only
+                  </span>
+                </div>
+                <p className="text-xs text-blue-800 mt-1">
+                  Official shop-floor permit verification view. Action buttons are disabled to show verified permit details and prevent accidental field modifications.
+                </p>
+              </div>
+            </div>
+            {currentUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsScanMode(false)
+                  const url = new URL(window.location.href)
+                  url.searchParams.delete("scan")
+                  window.history.replaceState({}, "", url.toString())
+                }}
+                className="text-xs font-semibold text-blue-700 hover:text-blue-950 bg-white border border-blue-300 hover:bg-blue-50 px-3.5 py-2 rounded-lg shadow-xs transition-colors shrink-0 whitespace-nowrap"
+              >
+                Switch to Management Mode
+              </button>
+            )}
           </div>
+        ) : (
+          /* Action Controls Bar (Only render allowed actions when NOT in scan mode) */
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Available Actions
+            </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* EDIT DRAFT (for DRAFT) */}
-            {permit.status === "DRAFT" && (isRequester || isAdmin) && (
-              <Link
-                href={`/permits/new?editDraftId=${permit.id}`}
-                className="min-h-[44px] px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition border border-slate-300"
-              >
-                Edit Draft
-              </Link>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* EDIT DRAFT (for DRAFT) */}
+              {permit.status === "DRAFT" && (isRequester || isAdmin) && (
+                <Link
+                  href={`/permits/new?editDraftId=${permit.id}`}
+                  className="min-h-[44px] px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition border border-slate-300"
+                >
+                  Edit Draft
+                </Link>
+              )}
 
-            {/* SUBMIT (for DRAFT) */}
-            {permit.status === "DRAFT" && (isRequester || isAdmin) && (
-              <button
-                disabled={actionLoading}
-                onClick={() => executeAction("SUBMIT")}
-                className="min-h-[44px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
-              >
-                <Send className="w-3.5 h-3.5" />
-                Submit for Approval
-              </button>
-            )}
-
-            {/* DRAFT Info notice if viewed by other roles */}
-            {permit.status === "DRAFT" && !isRequester && !isAdmin && (
-              <span className="text-xs text-slate-500 italic">
-                Draft in progress by {permit.requester?.name || "Requester"}. Awaiting submission.
-              </span>
-            )}
-
-            {/* REVIEW / APPROVE (for PENDING_APPROVAL) */}
-            {canUserApprove && (
-              <button
-                disabled={actionLoading}
-                onClick={() => setShowApprovalModal(true)}
-                className="min-h-[44px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
-              >
-                <FileCheck className="w-3.5 h-3.5" />
-                Review & Sign Approval
-              </button>
-            )}
-
-            {/* ACTIVATE (for APPROVED) */}
-            {permit.status === "APPROVED" && (isRequester || isSafetyOfficer || isAdmin) && (
-              <button
-                disabled={actionLoading}
-                onClick={() => executeAction("ACTIVATE")}
-                className="min-h-[44px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
-              >
-                <Play className="w-3.5 h-3.5" />
-                Activate on Shop Floor
-              </button>
-            )}
-
-            {/* SUSPEND (for ACTIVE - Safety Officer / Admin) */}
-            {permit.status === "ACTIVE" && (isSafetyOfficer || isAdmin) && (
-              <button
-                disabled={actionLoading}
-                onClick={() => setShowSuspendModal(true)}
-                className="min-h-[44px] px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
-              >
-                <Pause className="w-3.5 h-3.5" />
-                Suspend Work
-              </button>
-            )}
-
-            {/* RESUME (for SUSPENDED - Safety Officer / Admin) */}
-            {permit.status === "SUSPENDED" && (isSafetyOfficer || isAdmin) && (
-              <button
-                disabled={actionLoading}
-                onClick={() => executeAction("RESUME", { reason: "Safety clearances confirmed" })}
-                className="min-h-[44px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
-              >
-                <Play className="w-3.5 h-3.5" />
-                Resume Work
-              </button>
-            )}
-
-            {/* EXTEND TIME (for ACTIVE) */}
-            {permit.status === "ACTIVE" && (isRequester || isSafetyOfficer || isAdmin) && (
-              <button
-                disabled={actionLoading}
-                onClick={() => setShowExtensionModal(true)}
-                className="min-h-[44px] px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
-              >
-                <Clock className="w-3.5 h-3.5 text-blue-600" />
-                Request Extension
-              </button>
-            )}
-
-            {/* CLOSE (for ACTIVE - Requester / Safety) */}
-            {permit.status === "ACTIVE" && (isRequester || isSafetyOfficer || isAdmin) && (
-              <button
-                disabled={actionLoading}
-                onClick={() => setShowClosureModal(true)}
-                className="min-h-[44px] px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Close Permit (Work Complete)
-              </button>
-            )}
-
-            {/* VERIFY CLOSURE (for CLOSED - Safety Officer / Admin) */}
-            {permit.status === "CLOSED" && (isSafetyOfficer || isAdmin) && (
-              <button
-                disabled={actionLoading}
-                onClick={() => setShowVerifyClosureModal(true)}
-                className="min-h-[44px] px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Verify Site Safety & Closeout
-              </button>
-            )}
-
-            {/* CANCEL (for non-terminal) */}
-            {["DRAFT", "PENDING_APPROVAL", "APPROVED", "ACTIVE", "SUSPENDED"].includes(permit.status) &&
-              (isRequester || isAdmin) && (
+              {/* SUBMIT (for DRAFT) */}
+              {permit.status === "DRAFT" && (isRequester || isAdmin) && (
                 <button
                   disabled={actionLoading}
-                  onClick={() => {
-                    const r = prompt("Reason for cancellation:")
-                    if (r) executeAction("CANCEL", { reason: r })
-                  }}
-                  className="min-h-[44px] px-3 py-2 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition"
+                  onClick={() => executeAction("SUBMIT")}
+                  className="min-h-[44px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
                 >
-                  Cancel Permit
+                  <Send className="w-3.5 h-3.5" />
+                  Submit for Approval
                 </button>
               )}
+
+              {/* DRAFT Info notice if viewed by other roles */}
+              {permit.status === "DRAFT" && !isRequester && !isAdmin && (
+                <span className="text-xs text-slate-500 italic">
+                  Draft in progress by {permit.requester?.name || "Requester"}. Awaiting submission.
+                </span>
+              )}
+
+              {/* REVIEW / APPROVE (for PENDING_APPROVAL) */}
+              {canUserApprove && (
+                <button
+                  disabled={actionLoading}
+                  onClick={() => setShowApprovalModal(true)}
+                  className="min-h-[44px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                >
+                  <FileCheck className="w-3.5 h-3.5" />
+                  Review & Sign Approval
+                </button>
+              )}
+
+              {/* ACTIVATE (for APPROVED) */}
+              {permit.status === "APPROVED" && (isRequester || isSafetyOfficer || isAdmin) && (
+                <button
+                  disabled={actionLoading}
+                  onClick={() => executeAction("ACTIVATE")}
+                  className="min-h-[44px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  Activate on Shop Floor
+                </button>
+              )}
+
+              {/* SUSPEND (for ACTIVE - Safety Officer / Admin) */}
+              {permit.status === "ACTIVE" && (isSafetyOfficer || isAdmin) && (
+                <button
+                  disabled={actionLoading}
+                  onClick={() => setShowSuspendModal(true)}
+                  className="min-h-[44px] px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                >
+                  <Pause className="w-3.5 h-3.5" />
+                  Suspend Work
+                </button>
+              )}
+
+              {/* RESUME (for SUSPENDED - Safety Officer / Admin) */}
+              {permit.status === "SUSPENDED" && (isSafetyOfficer || isAdmin) && (
+                <button
+                  disabled={actionLoading}
+                  onClick={() => executeAction("RESUME", { reason: "Safety clearances confirmed" })}
+                  className="min-h-[44px] px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  Resume Work
+                </button>
+              )}
+
+              {/* EXTEND TIME (for ACTIVE) */}
+              {permit.status === "ACTIVE" && (isRequester || isSafetyOfficer || isAdmin) && (
+                <button
+                  disabled={actionLoading}
+                  onClick={() => setShowExtensionModal(true)}
+                  className="min-h-[44px] px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                >
+                  <Clock className="w-3.5 h-3.5 text-blue-600" />
+                  Request Extension
+                </button>
+              )}
+
+              {/* CLOSE (for ACTIVE - Requester / Safety) */}
+              {permit.status === "ACTIVE" && (isRequester || isSafetyOfficer || isAdmin) && (
+                <button
+                  disabled={actionLoading}
+                  onClick={() => setShowClosureModal(true)}
+                  className="min-h-[44px] px-4 py-2 bg-slate-900 hover:bg-black text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Close Permit (Work Complete)
+                </button>
+              )}
+
+              {/* VERIFY CLOSURE (for CLOSED - Safety Officer / Admin) */}
+              {permit.status === "CLOSED" && (isSafetyOfficer || isAdmin) && (
+                <button
+                  disabled={actionLoading}
+                  onClick={() => setShowVerifyClosureModal(true)}
+                  className="min-h-[44px] px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Verify Site Safety & Closeout
+                </button>
+              )}
+
+              {/* CANCEL (for non-terminal) */}
+              {["DRAFT", "PENDING_APPROVAL", "APPROVED", "ACTIVE", "SUSPENDED"].includes(permit.status) &&
+                (isRequester || isAdmin) && (
+                  <button
+                    disabled={actionLoading}
+                    onClick={() => {
+                      const r = prompt("Reason for cancellation:")
+                      if (r) executeAction("CANCEL", { reason: r })
+                    }}
+                    className="min-h-[44px] px-3 py-2 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition"
+                  >
+                    Cancel Permit
+                  </button>
+                )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Validity & Time Information */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
@@ -688,8 +758,8 @@ export default function PermitDetailPage() {
               </span>
             </div>
 
-            {/* Input Form for New Entry (Only when ACTIVE) */}
-            {permit.status === "ACTIVE" ? (
+            {/* Input Form for New Entry (Only when ACTIVE and not in scan view) */}
+            {permit.status === "ACTIVE" && !isScanMode ? (
               <div className="p-3 bg-purple-50/50 border border-purple-200 rounded-xl flex flex-col sm:flex-row items-center gap-2">
                 <input
                   type="text"
@@ -713,6 +783,11 @@ export default function PermitDetailPage() {
                   Log Entry
                 </button>
               </div>
+            ) : permit.status === "ACTIVE" && isScanMode ? (
+              <div className="text-[11px] text-blue-700 bg-blue-50/60 p-2.5 rounded-lg border border-blue-200 flex items-center gap-2">
+                <span className="font-semibold">Inspection Note:</span>
+                <span>Entry logging input is disabled in field scan view. Current personnel status is shown below.</span>
+              </div>
             ) : (
               <div className="text-[11px] text-slate-500 italic bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                 Entry logging is only active when the permit status is ACTIVE.
@@ -729,7 +804,7 @@ export default function PermitDetailPage() {
                       <th className="py-2 px-3">Badge</th>
                       <th className="py-2 px-3">Entry Time</th>
                       <th className="py-2 px-3">Exit Time</th>
-                      <th className="py-2 px-3 text-right">Action</th>
+                      {!isScanMode && <th className="py-2 px-3 text-right">Action</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -745,16 +820,18 @@ export default function PermitDetailPage() {
                             ? new Date(log.exitTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
                             : <span className="text-amber-700 font-bold">INSIDE VESSEL</span>}
                         </td>
-                        <td className="py-2 px-3 text-right">
-                          {!log.exitTime && permit.status === "ACTIVE" && (
-                            <button
-                              onClick={() => handleLogExit(log.id)}
-                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-medium text-[11px]"
-                            >
-                              Log Exit
-                            </button>
-                          )}
-                        </td>
+                        {!isScanMode && (
+                          <td className="py-2 px-3 text-right">
+                            {!log.exitTime && permit.status === "ACTIVE" && (
+                              <button
+                                onClick={() => handleLogExit(log.id)}
+                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-medium text-[11px]"
+                              >
+                                Log Exit
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -785,7 +862,7 @@ export default function PermitDetailPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={ext.status} />
-                    {ext.status === "PENDING" && (isSafetyOfficer || isAdmin) && !isRequester && (
+                    {ext.status === "PENDING" && (isSafetyOfficer || isAdmin) && !isRequester && !isScanMode && (
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => reviewExtension(ext.id, "APPROVED")}
