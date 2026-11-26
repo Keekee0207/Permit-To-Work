@@ -69,18 +69,6 @@ export function Navbar() {
                 >
                   Dashboard
                 </Link>
-                {(currentUser?.role === "REQUESTER" || currentUser?.role === "ADMIN") && (
-                  <Link
-                    href="/permits/new"
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                      pathname === "/permits/new"
-                        ? "text-blue-600 bg-blue-50/60 font-semibold"
-                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                    }`}
-                  >
-                    New Permit
-                  </Link>
-                )}
                 {currentUser?.role === "ADMIN" && (
                   <Link
                     href="/admin"

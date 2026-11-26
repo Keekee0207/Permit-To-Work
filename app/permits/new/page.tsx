@@ -269,9 +269,11 @@ function PermitFormContent() {
           setTimeout(() => {
             router.push("/")
             router.refresh()
-          }, 1200)
+          }, 800)
         } else {
-          router.push(`/permits/${permitId}`)
+          // Submitted for approval: return directly to dashboard
+          router.push("/")
+          router.refresh()
         }
       }
     } catch (err: any) {
