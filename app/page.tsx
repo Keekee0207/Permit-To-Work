@@ -31,7 +31,9 @@ import {
   ArrowUpRight, 
   Zap,
   RotateCw,
-  ArrowUpDown
+  ArrowUpDown,
+  FileText,
+  ShieldCheck
 } from "lucide-react"
 
 export default function DashboardPage() {
@@ -163,6 +165,23 @@ export default function DashboardPage() {
   // All permits waiting for Area Owner or Safety Officer approvals
   const pendingApprovals = permits.filter((p) => p.status === "PENDING_APPROVAL")
   
+  // Count of drafts for the current user
+  const draftsCount = permits.filter((p) => p.status === "DRAFT").length
+
+  // Count of permits specifically awaiting this user's approval
+  const myPendingApprovalsCount = permits.filter((p) => {
+    if (p.status !== "PENDING_APPROVAL") return false
+    if (currentUser?.role === "AREA_OWNER") {
+      const aoApp = p.approvals?.find((a: any) => a.requiredRole === "AREA_OWNER")
+      return aoApp?.decision === "PENDING"
+    }
+    if (currentUser?.role === "SAFETY_OFFICER") {
+      const soApp = p.approvals?.find((a: any) => a.requiredRole === "SAFETY_OFFICER")
+      return soApp?.decision === "PENDING"
+    }
+    return false
+  }).length
+
   // Permits expiring in under 2 hours (120 minutes) that need extension or closure
   const expiringSoonPermits = permits.filter((p) => {
     if (p.status !== "ACTIVE" && p.status !== "PENDING_APPROVAL") return false
@@ -177,6 +196,19 @@ export default function DashboardPage() {
   // Step 5A: Filters matching search keywords, area, date, and status (before type filter)
   // This allows the 4 Type Navigation Pills to show exact matching counts for the current search query!
   const baseSearchedPermits = permits.filter((p) => {
+    // Filter 0: Role-Specific Action Filter (My Pending Approvals)
+    if (onlyMyPending) {
+      if (p.status !== "PENDING_APPROVAL") return false
+      if (currentUser?.role === "AREA_OWNER") {
+        const aoApp = p.approvals?.find((a: any) => a.requiredRole === "AREA_OWNER")
+        if (aoApp?.decision !== "PENDING") return false
+      }
+      if (currentUser?.role === "SAFETY_OFFICER") {
+        const soApp = p.approvals?.find((a: any) => a.requiredRole === "SAFETY_OFFICER")
+        if (soApp?.decision !== "PENDING") return false
+      }
+    }
+
     // Filter 1: Status Filter (including private drafts for requesters)
     if (selectedStatus !== "ALL") {
       if (selectedStatus === "DRAFT") {
@@ -376,9 +408,9 @@ export default function DashboardPage() {
 
       {/* -------------------------------------------------------------------- */}
       {/* SECTION 9C: OVERVIEW METRIC CARDS                                     */}
-      {/* Active Work, Expirations within 2h, and Clickable Pending Approvals  */}
+      {/* Active Work, Expirations within 2h, Pending Approvals, & Role Action */}
       {/* -------------------------------------------------------------------- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric Card 1: Active Permits Currently On Site */}
         <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex items-center justify-between">
           <div>
@@ -393,7 +425,7 @@ export default function DashboardPage() {
               Permits currently executing on site
             </p>
           </div>
-          <div className="w-12 h-12 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-center text-emerald-600">
+          <div className="w-12 h-12 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 shrink-0">
             <CheckCircle2 className="w-6 h-6" />
           </div>
         </div>
@@ -403,7 +435,7 @@ export default function DashboardPage() {
           <div>
             <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-              Expiring in Next 2 Hours
+              Expiring in 2 Hours
             </span>
             <div className="text-3xl font-extrabold text-[#0F172A] mt-1">
               {expiringSoonPermits.length}
@@ -412,16 +444,19 @@ export default function DashboardPage() {
               Requires extension or closure review
             </p>
           </div>
-          <div className="w-12 h-12 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center text-amber-600">
+          <div className="w-12 h-12 bg-amber-50 border border-amber-100 rounded-xl flex items-center justify-center text-amber-600 shrink-0">
             <Clock className="w-6 h-6" />
           </div>
         </div>
 
         {/* Metric Card 3: Interactive Pending Approval Filter Card */}
         <div 
-          onClick={() => setSelectedStatus(selectedStatus === "PENDING_APPROVAL" ? "ALL" : "PENDING_APPROVAL")}
+          onClick={() => {
+            setOnlyMyPending(false)
+            setSelectedStatus(selectedStatus === "PENDING_APPROVAL" && !onlyMyPending ? "ALL" : "PENDING_APPROVAL")
+          }}
           className={`bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex items-center justify-between cursor-pointer transition hover:border-blue-400 ${
-            selectedStatus === "PENDING_APPROVAL" ? "ring-2 ring-blue-600 bg-blue-50/20" : ""
+            selectedStatus === "PENDING_APPROVAL" && !onlyMyPending ? "ring-2 ring-blue-600 bg-blue-50/30" : ""
           }`}
           title="Click to filter table by Pending Approval"
         >
@@ -434,13 +469,72 @@ export default function DashboardPage() {
               {pendingApprovals.length}
             </div>
             <p className="text-[11px] text-[#475569] mt-0.5">
-              {selectedStatus === "PENDING_APPROVAL" ? "Click to clear filter" : "Click to view in table"}
+              {selectedStatus === "PENDING_APPROVAL" && !onlyMyPending ? "Click to clear filter" : "Click to view in table"}
             </p>
           </div>
-          <div className="w-12 h-12 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center text-blue-600">
+          <div className="w-12 h-12 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
             <Filter className="w-6 h-6" />
           </div>
         </div>
+
+        {/* Metric Card 4: Role-Adaptive Card (My Pending Approvals for Approvers, or My Drafts for Requesters/Admins) */}
+        {currentUser?.role === "AREA_OWNER" || currentUser?.role === "SAFETY_OFFICER" ? (
+          <div 
+            onClick={() => {
+              if (onlyMyPending) {
+                setOnlyMyPending(false)
+                setSelectedStatus("ALL")
+              } else {
+                setOnlyMyPending(true)
+                setSelectedStatus("PENDING_APPROVAL")
+              }
+            }}
+            className={`bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex items-center justify-between cursor-pointer transition hover:border-purple-400 ${
+              onlyMyPending ? "ring-2 ring-purple-600 bg-purple-50/40" : ""
+            }`}
+            title="Click to filter permits specifically requiring your signature"
+          >
+            <div>
+              <span className="text-xs font-semibold text-purple-700 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+                My Action Items
+              </span>
+              <div className="text-3xl font-extrabold text-[#0F172A] mt-1">
+                {myPendingApprovalsCount}
+              </div>
+              <p className="text-[11px] text-[#475569] mt-0.5">
+                {onlyMyPending ? "Showing your approvals" : "Requiring your signature"}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-purple-50 border border-purple-100 rounded-xl flex items-center justify-center text-purple-600 shrink-0">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+          </div>
+        ) : (
+          <div 
+            onClick={() => setSelectedStatus(selectedStatus === "DRAFT" ? "ALL" : "DRAFT")}
+            className={`bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex items-center justify-between cursor-pointer transition hover:border-slate-400 ${
+              selectedStatus === "DRAFT" ? "ring-2 ring-slate-600 bg-slate-50" : ""
+            }`}
+            title="Click to filter table by Drafts"
+          >
+            <div>
+              <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                My Drafts
+              </span>
+              <div className="text-3xl font-extrabold text-[#0F172A] mt-1">
+                {draftsCount}
+              </div>
+              <p className="text-[11px] text-[#475569] mt-0.5">
+                {selectedStatus === "DRAFT" ? "Click to clear filter" : "Unsubmitted work drafts"}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center text-slate-600 shrink-0">
+              <FileText className="w-6 h-6" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* -------------------------------------------------------------------- */}
@@ -515,9 +609,9 @@ export default function DashboardPage() {
       {/* SECTION 9F: MULTI-CRITERIA FILTER & SEARCH TOOLBAR                   */}
       {/* Search Input, Sort Dropdown, Area, Date, Type, Status, Reset/Refresh */}
       {/* -------------------------------------------------------------------- */}
-      <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-          <Search className="w-4 h-4 text-slate-400 ml-1" />
+      <div className="bg-white p-3.5 rounded-xl border border-[#E5E7EB] shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 flex-1 min-w-[260px] bg-slate-50 border border-slate-200 rounded-lg px-3 min-h-[40px] focus-within:border-blue-600 focus-within:bg-white transition-all">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <input
             type="text"
             placeholder="Search by Permit #, contractor, description, or plant area..."
@@ -548,7 +642,7 @@ export default function DashboardPage() {
           <select
             value={selectedArea}
             onChange={(e) => setSelectedArea(e.target.value)}
-            className="min-h-[40px] px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
+            className="min-h-[40px] px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
           >
             <option value="ALL">All Areas</option>
             {availableAreas.map((a: any) => (
@@ -563,13 +657,13 @@ export default function DashboardPage() {
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
             title="Filter by active date"
-            className="min-h-[40px] px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
+            className="min-h-[40px] px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
           />
 
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
-            className="min-h-[40px] px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
+            className="min-h-[40px] px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
           >
             <option value="ALL">All Types</option>
             <option value="HOT_WORK">Hot Work</option>
@@ -581,7 +675,7 @@ export default function DashboardPage() {
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="min-h-[40px] px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
+            className="min-h-[40px] px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-blue-600"
           >
             <option value="ALL">All Statuses</option>
             {currentUser?.role === "REQUESTER" && (
@@ -606,9 +700,10 @@ export default function DashboardPage() {
                 setDateFilter("")
                 setSearchQuery("")
                 setSortBy("NEWEST")
+                setOnlyMyPending(false)
               }}
               title="Reset all filters and sorting"
-              className="min-h-[40px] px-2.5 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50/50 rounded-lg hover:bg-red-50"
+              className="min-h-[40px] px-3.5 py-1.5 text-xs font-semibold text-red-600 border border-red-200 bg-red-50/70 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1"
             >
               Reset
             </button>
@@ -617,8 +712,9 @@ export default function DashboardPage() {
           <button
             onClick={loadData}
             title="Refresh list"
-            className="min-h-[40px] px-2.5 py-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
+            className="min-h-[40px] px-3.5 py-1.5 text-xs font-semibold text-slate-700 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1.5"
           >
+            <RotateCw className="w-3.5 h-3.5" />
             Refresh
           </button>
         </div>
@@ -637,10 +733,10 @@ export default function DashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-[#E5E7EB] text-[#475569] font-semibold uppercase tracking-wider">
+                <tr className="bg-slate-50/90 border-b border-[#E5E7EB] text-slate-600 font-bold uppercase tracking-wider text-[11px]">
                   {/* Column 1: Clickable Sort by Permit Type */}
                   <th
-                    className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition select-none group"
+                    className="py-3.5 px-4 text-left cursor-pointer hover:bg-slate-100 transition select-none group"
                     onClick={() => {
                       if (sortBy === "TYPE_ASC") setSortBy("TYPE_DESC")
                       else if (sortBy === "TYPE_DESC") setSortBy("NEWEST")
@@ -657,19 +753,19 @@ export default function DashboardPage() {
                   </th>
 
                   {/* Column 2: Facility Plant & Sub-Area */}
-                  <th className="py-3 px-4">Plant & Area</th>
+                  <th className="py-3.5 px-4 text-left">Plant & Area</th>
 
                   {/* Column 3: Work Description & Assigned Contractor */}
-                  <th className="py-3 px-4">Description / Contractor</th>
+                  <th className="py-3.5 px-4 text-left">Description / Contractor</th>
 
                   {/* Column 4: Time Schedule & Real-time Expiry Countdown */}
-                  <th className="py-3 px-4">Validity & Schedule</th>
+                  <th className="py-3.5 px-4 text-left">Validity & Schedule</th>
 
                   {/* Column 5: Current Permit Status */}
-                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3.5 px-4 text-left">Status</th>
 
                   {/* Column 6: Action Button */}
-                  <th className="py-3 px-4 text-right">Action</th>
+                  <th className="py-3.5 px-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E5E7EB]">
@@ -682,22 +778,22 @@ export default function DashboardPage() {
                   return (
                     <tr
                       key={p.id}
-                      className="hover:bg-slate-50/70 transition-colors group"
+                      className="hover:bg-slate-50/80 transition-colors group"
                     >
                       {/* Permit Number & Colored Type Icon */}
-                      <td className="py-3.5 px-4 font-mono font-semibold text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <span className="p-1.5 rounded bg-slate-100 border border-slate-200">
+                      <td className="py-3.5 px-4 align-middle text-slate-900">
+                        <div className="flex items-center gap-2.5">
+                          <span className="p-1.5 rounded-lg bg-slate-100 border border-slate-200 shrink-0">
                             {getTypeIcon(p.type)}
                           </span>
                           <div>
                             <Link
                               href={`/permits/${p.id}`}
-                              className="text-blue-600 hover:underline font-bold"
+                              className="text-blue-600 hover:text-blue-800 hover:underline font-mono font-bold text-xs"
                             >
                               {p.permitNumber}
                             </Link>
-                            <div className="text-[10px] text-slate-500 font-sans uppercase">
+                            <div className="text-[10px] text-slate-500 font-sans uppercase font-medium">
                               {p.type.replace(/_/g, " ")}
                             </div>
                           </div>
@@ -705,8 +801,8 @@ export default function DashboardPage() {
                       </td>
 
                       {/* Plant and specific area tag */}
-                      <td className="py-3.5 px-4 text-slate-700">
-                        <div className="font-semibold text-slate-900">
+                      <td className="py-3.5 px-4 align-middle text-slate-700">
+                        <div className="font-semibold text-slate-900 text-xs">
                           {p.area?.name || "General Area"}
                         </div>
                         <div className="text-[11px] text-slate-500">
@@ -715,26 +811,26 @@ export default function DashboardPage() {
                       </td>
 
                       {/* Work description and contractor */}
-                      <td className="py-3.5 px-4 max-w-xs">
-                        <div className="line-clamp-1 font-medium text-slate-800" title={p.workDescription}>
+                      <td className="py-3.5 px-4 align-middle max-w-xs">
+                        <div className="line-clamp-1 font-medium text-slate-800 text-xs" title={p.workDescription}>
                           {p.workDescription}
                         </div>
                         <div className="text-[11px] text-slate-500">
-                          Team: <span className="text-slate-700">{p.contractorTeam}</span> (by {p.requester?.name})
+                          Team: <span className="text-slate-700 font-medium">{p.contractorTeam}</span> (by {p.requester?.name})
                         </div>
                       </td>
 
                       {/* Work validity schedule and countdown */}
-                      <td className="py-3.5 px-4">
-                        <div className="text-slate-800 font-medium">
+                      <td className="py-3.5 px-4 align-middle">
+                        <div className="text-slate-800 font-medium text-xs">
                           {new Date(p.plannedStart).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          {" - "}
+                          {" – "}
                           {new Date(p.extendedUntil || p.plannedEnd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </div>
-                        <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                          {new Date(p.plannedStart).toLocaleDateString("en-IN")}
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                          <span>{new Date(p.plannedStart).toLocaleDateString("en-IN")}</span>
                           {isExpiringSoon && (
-                            <span className="text-amber-700 font-semibold bg-amber-50 px-1 rounded border border-amber-200">
+                            <span className="text-amber-800 font-bold bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded text-[10px]">
                               ⏱ {formatCountdown(p.extendedUntil || p.plannedEnd)}
                             </span>
                           )}
@@ -742,25 +838,25 @@ export default function DashboardPage() {
                       </td>
 
                       {/* Status badge */}
-                      <td className="py-3.5 px-4">
+                      <td className="py-3.5 px-4 align-middle">
                         <div className="flex flex-col gap-1 items-start">
                           <StatusBadge status={p.status} />
                           {isExpiringSoon && (
-                            <span className="text-[10px] text-amber-700 font-bold tracking-tight">
-                              EXPIRING SOON
+                            <span className="text-[10px] text-amber-700 font-bold uppercase tracking-tight">
+                              Expiring Soon
                             </span>
                           )}
                         </div>
                       </td>
 
-                      {/* Action link to details */}
-                      <td className="py-3.5 px-4 text-right">
+                      {/* Action link to details: Fully Visible in Deep Blue */}
+                      <td className="py-3.5 px-4 text-right align-middle">
                         <Link
                           href={`/permits/${p.id}`}
-                          className="min-h-[36px] inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-blue-600 hover:text-white rounded-lg transition"
+                          className="min-h-[38px] inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 active:bg-blue-900 rounded-lg shadow-sm transition-all whitespace-nowrap"
                         >
-                          View Details
-                          <ArrowRight className="w-3.5 h-3.5" />
+                          <span>View Details</span>
+                          <ArrowRight className="w-3.5 h-3.5 stroke-[2.2]" />
                         </Link>
                       </td>
                     </tr>
