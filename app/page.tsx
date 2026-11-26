@@ -16,7 +16,8 @@ import {
   Box, 
   ArrowUpRight, 
   Zap,
-  RotateCw
+  RotateCw,
+  ArrowUpDown
 } from "lucide-react"
 
 export default function DashboardPage() {
@@ -31,6 +32,7 @@ export default function DashboardPage() {
   const [selectedArea, setSelectedArea] = useState<string>("ALL")
   const [dateFilter, setDateFilter] = useState<string>("")
   const [searchQuery, setSearchQuery] = useState<string>("")
+  const [sortBy, setSortBy] = useState<string>("NEWEST")
   const [onlyMyPending, setOnlyMyPending] = useState<boolean>(false)
   const [availableAreas, setAvailableAreas] = useState<any[]>([])
 
@@ -93,8 +95,8 @@ export default function DashboardPage() {
     return diffHours > 0 && diffHours <= 2
   })
 
-  // Filtered list for table
-  const filteredPermits = permits.filter((p) => {
+  // Base permits matching search & other criteria (before type filter)
+  const baseSearchedPermits = permits.filter((p) => {
     // 1. Status Filter
     if (selectedStatus !== "ALL") {
       if (selectedStatus === "DRAFT") {
@@ -104,13 +106,10 @@ export default function DashboardPage() {
       }
     }
 
-    // 2. Permit Type Filter
-    if (selectedType !== "ALL" && p.type !== selectedType) return false
-
-    // 3. Plant Area Filter
+    // 2. Plant Area Filter
     if (selectedArea !== "ALL" && p.areaId !== selectedArea) return false
 
-    // 4. Date Filter (matches any permit whose planned window overlaps the selected date)
+    // 3. Date Filter (matches any permit whose planned window overlaps the selected date)
     if (dateFilter) {
       try {
         const selectedDateStr = dateFilter
@@ -122,7 +121,7 @@ export default function DashboardPage() {
       }
     }
 
-    // 5. Search Bar Query (Case-insensitive across permit #, description, area, contractor, and equipment)
+    // 4. Search Bar Query (Case-insensitive across permit #, description, area, contractor, and equipment)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim()
       const matchNumber = p.permitNumber?.toLowerCase().includes(q)
@@ -137,6 +136,46 @@ export default function DashboardPage() {
     }
 
     return true
+  })
+
+  // Filtered list by selected permit type
+  const filteredPermits = baseSearchedPermits.filter((p) => {
+    if (selectedType !== "ALL" && p.type !== selectedType) return false
+    return true
+  })
+
+  // Sort hierarchy for the 4 permit types
+  const typeOrder: Record<string, number> = {
+    HOT_WORK: 1,
+    CONFINED_SPACE: 2,
+    WORKING_AT_HEIGHT: 3,
+    ELECTRICAL_LOTO: 4,
+  }
+
+  // Sorted list for table
+  const sortedAndFilteredPermits = [...filteredPermits].sort((a, b) => {
+    if (sortBy === "TYPE_ASC") {
+      const orderA = typeOrder[a.type] || 99
+      const orderB = typeOrder[b.type] || 99
+      if (orderA !== orderB) return orderA - orderB
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    }
+    if (sortBy === "TYPE_DESC") {
+      const orderA = typeOrder[a.type] || 99
+      const orderB = typeOrder[b.type] || 99
+      if (orderA !== orderB) return orderB - orderA
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    }
+    if (sortBy === "EXPIRING") {
+      const endA = new Date(a.extendedUntil || a.plannedEnd).getTime()
+      const endB = new Date(b.extendedUntil || b.plannedEnd).getTime()
+      return endA - endB
+    }
+    if (sortBy === "STATUS") {
+      return a.status.localeCompare(b.status)
+    }
+    // Default: NEWEST
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
 
   const getTypeIcon = (type: string) => {
@@ -297,11 +336,11 @@ export default function DashboardPage() {
       {/* Quick Permit Type Navigation Pills */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {[
-          { id: "ALL", label: "All Permits", icon: null, count: permits.length },
-          { id: "HOT_WORK", label: "Hot Work", icon: Flame, count: permits.filter(p => p.type === "HOT_WORK").length, activeColor: "bg-amber-600 text-white border-amber-600" },
-          { id: "CONFINED_SPACE", label: "Confined Space", icon: Box, count: permits.filter(p => p.type === "CONFINED_SPACE").length, activeColor: "bg-purple-600 text-white border-purple-600" },
-          { id: "WORKING_AT_HEIGHT", label: "Height Work", icon: ArrowUpRight, count: permits.filter(p => p.type === "WORKING_AT_HEIGHT").length, activeColor: "bg-blue-600 text-white border-blue-600" },
-          { id: "ELECTRICAL_LOTO", label: "Electrical LOTO", icon: Zap, count: permits.filter(p => p.type === "ELECTRICAL_LOTO").length, activeColor: "bg-red-600 text-white border-red-600" },
+          { id: "ALL", label: "All Permits", icon: null, count: baseSearchedPermits.length },
+          { id: "HOT_WORK", label: "Hot Work", icon: Flame, count: baseSearchedPermits.filter(p => p.type === "HOT_WORK").length, activeColor: "bg-amber-600 text-white border-amber-600" },
+          { id: "CONFINED_SPACE", label: "Confined Space", icon: Box, count: baseSearchedPermits.filter(p => p.type === "CONFINED_SPACE").length, activeColor: "bg-purple-600 text-white border-purple-600" },
+          { id: "WORKING_AT_HEIGHT", label: "Height Work", icon: ArrowUpRight, count: baseSearchedPermits.filter(p => p.type === "WORKING_AT_HEIGHT").length, activeColor: "bg-blue-600 text-white border-blue-600" },
+          { id: "ELECTRICAL_LOTO", label: "Electrical LOTO", icon: Zap, count: baseSearchedPermits.filter(p => p.type === "ELECTRICAL_LOTO").length, activeColor: "bg-red-600 text-white border-red-600" },
         ].map((tab) => {
           const isSelected = selectedType === tab.id
           const Icon = tab.icon
@@ -343,6 +382,23 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Sort Dropdown */}
+          <div className="flex items-center gap-1.5 min-h-[40px] px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              aria-label="Sort permits"
+              className="bg-transparent text-xs text-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="NEWEST">Sort: Newest First</option>
+              <option value="TYPE_ASC">Sort: Permit Type (Hot → Confined → Height → LOTO)</option>
+              <option value="TYPE_DESC">Sort: Permit Type (LOTO → Height → Confined → Hot)</option>
+              <option value="EXPIRING">Sort: Expiring Soonest</option>
+              <option value="STATUS">Sort: By Status</option>
+            </select>
+          </div>
+
           <select
             value={selectedArea}
             onChange={(e) => setSelectedArea(e.target.value)}
@@ -395,7 +451,7 @@ export default function DashboardPage() {
             <option value="CANCELLED">Cancelled</option>
           </select>
 
-          {(selectedStatus !== "ALL" || selectedType !== "ALL" || selectedArea !== "ALL" || dateFilter || searchQuery) && (
+          {(selectedStatus !== "ALL" || selectedType !== "ALL" || selectedArea !== "ALL" || dateFilter || searchQuery || sortBy !== "NEWEST") && (
             <button
               onClick={() => {
                 setSelectedStatus("ALL")
@@ -403,8 +459,9 @@ export default function DashboardPage() {
                 setSelectedArea("ALL")
                 setDateFilter("")
                 setSearchQuery("")
+                setSortBy("NEWEST")
               }}
-              title="Reset all filters"
+              title="Reset all filters and sorting"
               className="min-h-[40px] px-2.5 py-1.5 text-xs text-red-600 border border-red-200 bg-red-50/50 rounded-lg hover:bg-red-50"
             >
               Reset
@@ -423,7 +480,7 @@ export default function DashboardPage() {
 
       {/* Permits List Table (Shop-Floor Responsive) */}
       <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-xs overflow-hidden">
-        {filteredPermits.length === 0 ? (
+        {sortedAndFilteredPermits.length === 0 ? (
           <div className="p-12 text-center text-slate-500 text-sm">
             No permits found matching criteria.
           </div>
@@ -432,7 +489,22 @@ export default function DashboardPage() {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-[#E5E7EB] text-[#475569] font-semibold uppercase tracking-wider">
-                  <th className="py-3 px-4">Permit # & Type</th>
+                  <th
+                    className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition select-none group"
+                    onClick={() => {
+                      if (sortBy === "TYPE_ASC") setSortBy("TYPE_DESC")
+                      else if (sortBy === "TYPE_DESC") setSortBy("NEWEST")
+                      else setSortBy("TYPE_ASC")
+                    }}
+                    title="Click to sort by Permit Type"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Permit # & Type</span>
+                      <ArrowUpDown className={`w-3.5 h-3.5 ${sortBy.startsWith("TYPE") ? "text-blue-600 font-bold" : "text-slate-400 opacity-60 group-hover:opacity-100"}`} />
+                      {sortBy === "TYPE_ASC" && <span className="text-[10px] text-blue-600 font-mono font-normal">Hot→LOTO</span>}
+                      {sortBy === "TYPE_DESC" && <span className="text-[10px] text-blue-600 font-mono font-normal">LOTO→Hot</span>}
+                    </div>
+                  </th>
                   <th className="py-3 px-4">Plant & Area</th>
                   <th className="py-3 px-4">Description / Contractor</th>
                   <th className="py-3 px-4">Validity & Schedule</th>
@@ -441,7 +513,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E5E7EB]">
-                {filteredPermits.map((p) => {
+                {sortedAndFilteredPermits.map((p) => {
                   const end = new Date(p.extendedUntil || p.plannedEnd).getTime()
                   const diffHours = (end - now) / (1000 * 60 * 60)
                   const isExpiringSoon = (p.status === "ACTIVE" || p.status === "PENDING_APPROVAL") && diffHours > 0 && diffHours <= 2
