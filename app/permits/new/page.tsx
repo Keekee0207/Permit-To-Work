@@ -1,5 +1,19 @@
 "use client"
 
+/**
+ * ============================================================================
+ * PERMIT TO WORK CREATION & DRAFT EDITOR WORKFLOW
+ * ============================================================================
+ * Allows Requesters and Admins to raise compliant industrial work permits:
+ * 1. Role Verification: Restricted exclusively to REQUESTER and ADMIN roles.
+ * 2. Type-Specific Configs: Automatically populates safety fields, hazards,
+ *    and checklists for Hot Work, Confined Space, Height Work, and Electrical LOTO.
+ * 3. Simultaneous Operations (SIMOPS) Conflict Detection: Real-time API check
+ *    for overlapping permits on the same plant equipment or area.
+ * 4. Flexible Completion: "Save as Draft" (private to requester) or "Submit for Approval".
+ * 5. Dashboard Feedback: Returns to dashboard with high-visibility green confirmation.
+ */
+
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { PERMIT_TYPE_REGISTRY, PermitTypeDefinition } from "@/lib/permitTypeConfig"
@@ -22,13 +36,16 @@ import {
 function PermitFormContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  // If editing an existing private draft, draft ID is passed via URL query
   const editDraftId = searchParams.get("editDraftId")
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [plants, setPlants] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isEditingDraft, setIsEditingDraft] = useState(false)
 
-  // Form State
+  // --------------------------------------------------------------------------
+  // CORE PERMIT FORM STATES
+  // --------------------------------------------------------------------------
   const [selectedType, setSelectedType] = useState<PermitType>("HOT_WORK")
   const [plantId, setPlantId] = useState("")
   const [areaId, setAreaId] = useState("")
@@ -42,22 +59,22 @@ function PermitFormContent() {
   const [plannedStart, setPlannedStart] = useState(`${todayStr}T09:00`)
   const [plannedEnd, setPlannedEnd] = useState(`${todayStr}T17:00`)
 
-  // Checklists and hazards
+  // Checklists, hazards, and required PPE
   const [hazards, setHazards] = useState<string[]>([])
   const [ppeRequired, setPpeRequired] = useState<string[]>([])
   const [precautions, setPrecautions] = useState<{ id: string; label: string; checked: boolean }[]>([])
 
-  // Dynamic type specific data
+  // Dynamic type-specific fields (e.g. gas tests, fire watch, isolation tags, harness check)
   const [typeData, setTypeData] = useState<Record<string, any>>({})
 
-  // Conflicts and validation
+  // SIMOPS Conflicts and validation state
   const [conflicts, setConflicts] = useState<any[]>([])
   const [checkingConflict, setCheckingConflict] = useState(false)
   const [error, setError] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [draftSavedToast, setDraftSavedToast] = useState(false)
 
-  // Active Type Configuration
+  // Active Type Configuration from the central registry
   const currentConfig: PermitTypeDefinition = PERMIT_TYPE_REGISTRY[selectedType]
 
   // Initialize defaults on type switch
@@ -203,6 +220,11 @@ function PermitFormContent() {
     )
   }
 
+  // --------------------------------------------------------------------------
+  // PERMIT SUBMISSION & DRAFT SAVING HANDLER
+  // --------------------------------------------------------------------------
+  // submitNow = false -> Saves as private draft (status: DRAFT, visible only to requester)
+  // submitNow = true  -> Submits to Area Owner & Safety Officer (status: PENDING_APPROVAL)
   const handleSaveOrSubmit = async (submitNow: boolean) => {
     setError("")
     if (!workDescription.trim()) {
@@ -212,7 +234,7 @@ function PermitFormContent() {
 
     setSubmitting(true)
 
-    // Format type specific fields properly
+    // Sanitize and format type-specific fields (numbers, comma-separated isolation points)
     const sanitizedTypeData: Record<string, any> = { ...typeData }
     currentConfig.fields.forEach((f) => {
       if (f.type === "number") {
@@ -222,6 +244,7 @@ function PermitFormContent() {
       }
     })
 
+    // Construct the complete industrial permit payload
     const payload = {
       type: selectedType,
       plantId,
@@ -236,10 +259,11 @@ function PermitFormContent() {
       ppeRequired,
       precautionsChecklist: precautions,
       typeSpecificData: sanitizedTypeData,
-      submitNow,
+      submitNow, // Boolean flag determining DRAFT vs PENDING_APPROVAL
     }
 
     try {
+      // If editing an existing draft, update with PUT; otherwise create new with POST
       const apiUrl = isEditingDraft ? `/api/permits/${editDraftId}` : "/api/permits"
       const apiMethod = isEditingDraft ? "PUT" : "POST"
 
@@ -255,7 +279,7 @@ function PermitFormContent() {
       } else {
         const permitId = data.permit?.id || editDraftId
         if (isEditingDraft && submitNow) {
-          // If editing a draft and user clicked Submit, trigger the submit action
+          // If transitioning an existing draft to submitted, trigger the SUBMIT action
           await fetch(`/api/permits/${permitId}/actions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -265,11 +289,11 @@ function PermitFormContent() {
 
         const permitNum = data.permit?.permitNumber || ""
         if (!submitNow) {
-          // Saved as draft: redirect to dashboard with notification
+          // Action 1: Saved as draft -> Return to dashboard with draft success banner
           router.push(`/?notify=draft_saved&num=${encodeURIComponent(permitNum)}`)
           router.refresh()
         } else {
-          // Submitted for approval: redirect to dashboard with notification
+          // Action 2: Submitted for approval -> Return to dashboard with submission success banner
           router.push(`/?notify=submitted&num=${encodeURIComponent(permitNum)}`)
           router.refresh()
         }

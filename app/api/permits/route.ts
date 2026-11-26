@@ -1,3 +1,11 @@
+/**
+ * ============================================================================
+ * PERMITS REST API ENDPOINT (/api/permits)
+ * ============================================================================
+ * GET  - Fetches visible permits respecting role boundaries & private drafts.
+ * POST - Creates new permits (drafts or submitted) with atomic approval slots.
+ */
+
 import { NextRequest, NextResponse } from "next/server"
 import { getSessionUser, unauthorizedResponse, forbiddenResponse } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
@@ -6,6 +14,9 @@ import { PermitStatus, Role, PermitType } from "@prisma/client"
 import { getPermitTypeConfig } from "@/lib/permitTypeConfig"
 import { notifyStub } from "@/lib/notifyStub"
 
+// ----------------------------------------------------------------------------
+// GET: Query visible permits
+// ----------------------------------------------------------------------------
 export async function GET(req: NextRequest) {
   try {
     const user = await getSessionUser(req)
@@ -40,21 +51,27 @@ export async function GET(req: NextRequest) {
       where.plannedEnd = { ...where.plannedEnd, lte: new Date(endDate) }
     }
 
-    // Strict Privacy Rule: DRAFT permits are strictly private to their creator.
-    // Area Owners, Safety Officers, and Admins cannot see drafts created by other users.
+    // ------------------------------------------------------------------------
+    // STRICT PRIVACY RULE: Private Drafts
+    // ------------------------------------------------------------------------
+    // Drafts are strictly private to the technician who created them.
+    // Area Owners, Safety Officers, and Admins cannot see other users' drafts.
     where.OR = [
       { status: { not: PermitStatus.DRAFT } },
       { status: PermitStatus.DRAFT, requesterId: user.userId },
     ]
 
-    // If a specific status of DRAFT was queried, ensure only own drafts are returned
+    // If requester explicitly filtered by "DRAFT", restrict to own drafts only
     if (status === PermitStatus.DRAFT) {
       delete where.OR
       where.status = PermitStatus.DRAFT
       where.requesterId = user.userId
     }
 
-    // Role-specific filtering if "pendingMyApproval" requested
+    // ------------------------------------------------------------------------
+    // ROLE-SPECIFIC QUEUE: "pendingMyApproval"
+    // ------------------------------------------------------------------------
+    // Filters down to only permits specifically awaiting this user's signature
     if (pendingMyApproval) {
       where.status = PermitStatus.PENDING_APPROVAL
       if (user.role === Role.AREA_OWNER) {
@@ -102,12 +119,19 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// ----------------------------------------------------------------------------
+// POST: Create new permit or draft
+// ----------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
     const user = await getSessionUser(req)
     if (!user) return unauthorizedResponse()
 
-    // Enforce role restriction: Only REQUESTER and ADMIN can create permits
+    // ------------------------------------------------------------------------
+    // STRICT CREATION RBAC
+    // ------------------------------------------------------------------------
+    // Only REQUESTER and ADMIN can create permits. Area Owners and Safety Officers
+    // are strictly approvers/auditors and cannot create permits.
     if (user.role !== Role.REQUESTER && user.role !== Role.ADMIN) {
       return NextResponse.json(
         { error: "Only Requesters and Admins can create permits. Area Owners and Safety Officers are restricted to approval actions." },
@@ -130,7 +154,7 @@ export async function POST(req: NextRequest) {
       precautionsChecklist,
       typeSpecificData,
       photoUrl,
-      submitNow, // boolean: whether to save as DRAFT or submit immediately
+      submitNow, // Boolean: false -> DRAFT, true -> PENDING_APPROVAL
     } = body
 
     if (!type || !workDescription || !contractorTeam || !plantId || !areaId || !plannedStart || !plannedEnd) {

@@ -1,5 +1,18 @@
 "use client"
 
+/**
+ * ============================================================================
+ * PERMIT EXECUTION, DUAL APPROVAL & AUDIT CONTROL BOARD
+ * ============================================================================
+ * Dedicated detail screen for an individual Permit to Work:
+ * 1. Dual Sign-Off: Field Area Owner & Safety Officer digital canvas signatures.
+ * 2. Role Protection: Admins cannot sign in place of field officers; users
+ *    only see approval buttons when their role has pending action.
+ * 3. Lifecycle Transitions: Draft -> Pending -> Approved -> Active -> Suspended -> Closed -> Closed & Verified.
+ * 4. Safety Controls: Extension requests, on-site QR code verification, and confined space entry logs.
+ * 5. High-Visibility Feedback: Notifies the specific approver that their signature is permanently recorded.
+ */
+
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
@@ -31,22 +44,26 @@ export default function PermitDetailPage() {
   const router = useRouter()
   const permitId = params.id as string
 
+  // --------------------------------------------------------------------------
+  // STATE MANAGEMENT
+  // --------------------------------------------------------------------------
   const [permit, setPermit] = useState<any>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("")
   const [error, setError] = useState<string>("")
+  // High-visibility green feedback banner for approvers
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
-  // Modals state
+  // Modals for interactive permit state transitions
   const [showApprovalModal, setShowApprovalModal] = useState(false)
   const [showSuspendModal, setShowSuspendModal] = useState(false)
   const [showClosureModal, setShowClosureModal] = useState(false)
   const [showVerifyClosureModal, setShowVerifyClosureModal] = useState(false)
   const [showExtensionModal, setShowExtensionModal] = useState(false)
 
-  // Form states inside modals
+  // Approver modal form state
   const [approvalDecision, setApprovalDecision] = useState<"APPROVED" | "REJECTED">("APPROVED")
   const [approvalComment, setApprovalComment] = useState("")
   const [signatureData, setSignatureData] = useState<string | null>(null)
@@ -56,10 +73,13 @@ export default function PermitDetailPage() {
   const [extensionHours, setExtensionHours] = useState(2)
   const [extensionReason, setExtensionReason] = useState("")
 
-  // Confined space entry log inputs
+  // Confined space entry/exit log inputs
   const [entryPersonName, setEntryPersonName] = useState("")
   const [entryBadgeNumber, setEntryBadgeNumber] = useState("")
 
+  // --------------------------------------------------------------------------
+  // DATA FETCHING & QR CODE GENERATION
+  // --------------------------------------------------------------------------
   const loadPermit = async () => {
     try {
       const [uRes, pRes] = await Promise.all([
@@ -74,7 +94,7 @@ export default function PermitDetailPage() {
       setCurrentUser(uRes.user)
       setPermit(pRes.permit)
 
-      // Generate QR Code data URL
+      // Generate dynamic QR Code for instant physical verification on shop floor
       const currentUrl = window.location.href
       const qrData = await QRCode.toDataURL(currentUrl, { width: 180, margin: 1 })
       setQrCodeUrl(qrData)
@@ -104,30 +124,47 @@ export default function PermitDetailPage() {
     )
   }
 
+  // --------------------------------------------------------------------------
+  // ROLE-BASED ACCESS CONTROL (RBAC) COMPUTATIONS
+  // --------------------------------------------------------------------------
   const currentUserId = currentUser?.id || currentUser?.userId
+  // Is this the technician who created the permit?
   const isRequester = currentUserId === permit.requesterId
+  // Is this user a designated Safety Officer?
   const isSafetyOfficer = currentUser?.role === "SAFETY_OFFICER"
+  // Is this user a system Administrator?
   const isAdmin = currentUser?.role === "ADMIN"
+  // Is this user assigned as the Area Owner for this specific plant zone?
   const isAreaOwner =
     currentUser?.role === "AREA_OWNER" &&
     (currentUser?.assignedAreaIds?.includes(permit.areaId) ||
       permit.area?.assignedUsers?.some((u: any) => u.userId === currentUserId))
 
-  // Check existing approvals for each role
+  // Approval status indicators for Area Owner and Safety Officer
   const areaOwnerApproval = permit.approvals?.find((a: any) => a.requiredRole === "AREA_OWNER")
   const safetyOfficerApproval = permit.approvals?.find((a: any) => a.requiredRole === "SAFETY_OFFICER")
   const hasAreaOwnerApproved = areaOwnerApproval?.decision === "APPROVED"
   const hasSafetyOfficerApproved = safetyOfficerApproval?.decision === "APPROVED"
 
   // Check if current user can approve (and has not already approved)
-  // Note: Admins are not allowed to approve in place of field Area Owners or Safety Officers
+  // --------------------------------------------------------------------------
+  // APPROVAL ELIGIBILITY RULE
+  // --------------------------------------------------------------------------
+  // 1. Strict self-approval ban: Requester can NEVER approve their own permit.
+  // 2. Dual sign-off: Area Owner and Safety Officer must each approve individually.
+  // 3. Once a role has approved, their button is hidden to prevent duplicate sign-offs.
+  // 4. Admins cannot sign in place of certified field Area Owners or Safety Officers.
   const canUserApprove =
     permit.status === "PENDING_APPROVAL" &&
     !isRequester && // Self-approval ban
     ((isAreaOwner && !hasAreaOwnerApproved) ||
       (isSafetyOfficer && !hasSafetyOfficerApproved))
 
-  // Execute State Machine Action
+  // --------------------------------------------------------------------------
+  // STATE MACHINE ACTION DISPATCHER
+  // --------------------------------------------------------------------------
+  // Calls the `/api/permits/[id]/actions` endpoint to transition permit status,
+  // record signatures, write immutable audit logs, and trigger green notifications.
   const executeAction = async (action: string, payload: any = {}) => {
     setError("")
     setActionLoading(true)
@@ -143,11 +180,13 @@ export default function PermitDetailPage() {
       if (!res.ok) {
         setError(data.error || "Action failed")
       } else {
+        // Close any active modal
         setShowApprovalModal(false)
         setShowSuspendModal(false)
         setShowClosureModal(false)
         setShowVerifyClosureModal(false)
 
+        // Set role-specific, personalized confirmation message
         if (action === "REVIEW_APPROVAL") {
           const roleLabel = currentUser?.role === "AREA_OWNER"
             ? "Area Owner"
@@ -159,6 +198,7 @@ export default function PermitDetailPage() {
           const approverName = currentUser?.name || "You"
 
           if (payload.decision === "APPROVED") {
+            // High-visibility green feedback explicitly naming the person and role
             setActionSuccessMessage(
               `Permit ${permit.permitNumber} has been officially approved by you (${approverName} - ${roleLabel})! Your digital signature has been permanently recorded.`
             )
@@ -179,6 +219,7 @@ export default function PermitDetailPage() {
           setActionSuccessMessage(`Permit ${permit.permitNumber} closed and verified successfully! Work site restored.`)
         }
 
+        // Re-fetch permit from database to reflect new status and signatures
         loadPermit()
       }
     } catch (err: any) {

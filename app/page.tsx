@@ -1,5 +1,19 @@
 "use client"
 
+/**
+ * ============================================================================
+ * SHOP-FLOOR PERMIT CONTROL BOARD (MAIN DASHBOARD)
+ * ============================================================================
+ * This is the central control screen of the Permit to Work (PTW) system.
+ * Key capabilities:
+ * 1. Real-time Compliance Monitoring (Active permits, pending approvals, expiry countdowns).
+ * 2. Role-Based Actions (Area Owner & Safety Officer pending approval filters).
+ * 3. Quick 4 Permit Type Navigation Tabs with dynamic live count badges.
+ * 4. Multi-Criteria Filtering (Search text, plant area, date range, type, status).
+ * 5. Flexible Sorting (Sort by the 4 permit types, newest, soonest expiry, status).
+ * 6. High-Visibility Green Alerts for saved drafts, submitted permits, and approvals.
+ */
+
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -22,11 +36,18 @@ import {
 
 export default function DashboardPage() {
   const router = useRouter()
+
+  // --------------------------------------------------------------------------
+  // STATE MANAGEMENT
+  // --------------------------------------------------------------------------
+  // Master list of all permits visible to the logged-in user
   const [permits, setPermits] = useState<any[]>([])
+  // Page loading indicator
   const [loading, setLoading] = useState(true)
+  // Current authenticated user session (role, id, name, assigned areas)
   const [currentUser, setCurrentUser] = useState<any>(null)
   
-  // Filters
+  // Active Filter States
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL")
   const [selectedType, setSelectedType] = useState<string>("ALL")
   const [selectedArea, setSelectedArea] = useState<string>("ALL")
@@ -35,15 +56,22 @@ export default function DashboardPage() {
   const [sortBy, setSortBy] = useState<string>("NEWEST")
   const [onlyMyPending, setOnlyMyPending] = useState<boolean>(false)
   const [availableAreas, setAvailableAreas] = useState<any[]>([])
+
+  // High-visibility green notification banner (triggered after saving draft or submitting permit)
   const [notification, setNotification] = useState<{
     type: "draft" | "submitted"
     title: string
     description: string
   } | null>(null)
 
-  // Real-time tick for countdown
+  // Real-time timestamp (updates every 15s to recalculate countdown timers)
   const [now, setNow] = useState<number>(Date.now())
 
+  // --------------------------------------------------------------------------
+  // 1. URL NOTIFICATION HANDLER
+  // --------------------------------------------------------------------------
+  // Checks if user was redirected from the permit form after saving or submitting.
+  // Displays a green toast banner and cleanly removes query parameters from the URL.
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search)
@@ -72,13 +100,21 @@ export default function DashboardPage() {
     }
   }, [])
 
+  // --------------------------------------------------------------------------
+  // 2. REAL-TIME TICKER
+  // --------------------------------------------------------------------------
+  // Ticks every 15 seconds to update permit validity countdowns in real time
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 15000)
     return () => clearInterval(timer)
   }, [])
 
+  // --------------------------------------------------------------------------
+  // 3. DATA FETCHING (USER, PLANTS, PERMITS)
+  // --------------------------------------------------------------------------
   const loadData = async () => {
     try {
+      // Fetch authenticated user profile & plant hierarchy in parallel
       const [userRes, plantsRes] = await Promise.all([
         fetch("/api/auth/me"),
         fetch("/api/plants"),
@@ -90,6 +126,7 @@ export default function DashboardPage() {
       }
       setCurrentUser(userData.user)
 
+      // Flatten plants and their sub-areas for the Area Filter dropdown
       const plantsData = await plantsRes.json()
       const areasList: any[] = []
       if (plantsData.plants) {
@@ -101,7 +138,7 @@ export default function DashboardPage() {
       }
       setAvailableAreas(areasList)
 
-      // Fetch all visible permits for this user without server-side filter conflicts
+      // Fetch visible permits (respecting role-based privacy rules on backend)
       const res = await fetch("/api/permits")
       const data = await res.json()
       setPermits(data.permits || [])
@@ -112,15 +149,21 @@ export default function DashboardPage() {
     }
   }
 
+  // Load initial data on mount
   useEffect(() => {
     loadData()
   }, [])
 
-  // Computed metrics
+  // --------------------------------------------------------------------------
+  // 4. COMPUTED METRICS FOR DASHBOARD CARDS
+  // --------------------------------------------------------------------------
+  // All permits currently undergoing live execution on site
   const activePermits = permits.filter((p) => p.status === "ACTIVE")
+
+  // All permits waiting for Area Owner or Safety Officer approvals
   const pendingApprovals = permits.filter((p) => p.status === "PENDING_APPROVAL")
   
-  // Permits expiring within next 2 hours (120 minutes)
+  // Permits expiring in under 2 hours (120 minutes) that need extension or closure
   const expiringSoonPermits = permits.filter((p) => {
     if (p.status !== "ACTIVE" && p.status !== "PENDING_APPROVAL") return false
     const end = new Date(p.extendedUntil || p.plannedEnd).getTime()
@@ -128,9 +171,13 @@ export default function DashboardPage() {
     return diffHours > 0 && diffHours <= 2
   })
 
-  // Base permits matching search & other criteria (before type filter)
+  // --------------------------------------------------------------------------
+  // 5. IN-MEMORY FILTERING & DYNAMIC SEARCH
+  // --------------------------------------------------------------------------
+  // Step 5A: Filters matching search keywords, area, date, and status (before type filter)
+  // This allows the 4 Type Navigation Pills to show exact matching counts for the current search query!
   const baseSearchedPermits = permits.filter((p) => {
-    // 1. Status Filter
+    // Filter 1: Status Filter (including private drafts for requesters)
     if (selectedStatus !== "ALL") {
       if (selectedStatus === "DRAFT") {
         if (p.status !== "DRAFT") return false
@@ -139,10 +186,10 @@ export default function DashboardPage() {
       }
     }
 
-    // 2. Plant Area Filter
+    // Filter 2: Plant Area Filter
     if (selectedArea !== "ALL" && p.areaId !== selectedArea) return false
 
-    // 3. Date Filter (matches any permit whose planned window overlaps the selected date)
+    // Filter 3: Date Filter (checks if the selected date falls within the planned work window)
     if (dateFilter) {
       try {
         const selectedDateStr = dateFilter
@@ -150,11 +197,11 @@ export default function DashboardPage() {
         const pEndStr = new Date(p.extendedUntil || p.plannedEnd).toISOString().slice(0, 10)
         if (selectedDateStr < pStartStr || selectedDateStr > pEndStr) return false
       } catch (e) {
-        // Fallback if date parsing fails
+        // Fallback if date string cannot be parsed
       }
     }
 
-    // 4. Search Bar Query (Case-insensitive across permit #, description, area, contractor, and equipment)
+    // Filter 4: Text Search Query (Case-insensitive across permit #, description, area, contractor, equipment, and requester)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim()
       const matchNumber = p.permitNumber?.toLowerCase().includes(q)
@@ -171,13 +218,16 @@ export default function DashboardPage() {
     return true
   })
 
-  // Filtered list by selected permit type
+  // Step 5B: Filter by the 4 Permit Types (Hot Work, Confined Space, Height Work, Electrical LOTO)
   const filteredPermits = baseSearchedPermits.filter((p) => {
     if (selectedType !== "ALL" && p.type !== selectedType) return false
     return true
   })
 
-  // Sort hierarchy for the 4 permit types
+  // --------------------------------------------------------------------------
+  // 6. MULTI-CRITERIA SORTING LOGIC
+  // --------------------------------------------------------------------------
+  // Canonical industrial order for grouping the 4 permit types
   const typeOrder: Record<string, number> = {
     HOT_WORK: 1,
     CONFINED_SPACE: 2,
@@ -185,32 +235,40 @@ export default function DashboardPage() {
     ELECTRICAL_LOTO: 4,
   }
 
-  // Sorted list for table
+  // Sorted permit list ready for table display
   const sortedAndFilteredPermits = [...filteredPermits].sort((a, b) => {
+    // Sort Option A: Group by Permit Type (Hot Work -> Confined Space -> Height -> Electrical)
     if (sortBy === "TYPE_ASC") {
       const orderA = typeOrder[a.type] || 99
       const orderB = typeOrder[b.type] || 99
       if (orderA !== orderB) return orderA - orderB
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     }
+    // Sort Option B: Reverse Permit Type Order (Electrical -> Height -> Confined -> Hot)
     if (sortBy === "TYPE_DESC") {
       const orderA = typeOrder[a.type] || 99
       const orderB = typeOrder[b.type] || 99
       if (orderA !== orderB) return orderB - orderA
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     }
+    // Sort Option C: Soonest Expiring First
     if (sortBy === "EXPIRING") {
       const endA = new Date(a.extendedUntil || a.plannedEnd).getTime()
       const endB = new Date(b.extendedUntil || b.plannedEnd).getTime()
       return endA - endB
     }
+    // Sort Option D: Alphabetical by Status
     if (sortBy === "STATUS") {
       return a.status.localeCompare(b.status)
     }
-    // Default: NEWEST
+    // Default: Newest Created Permits First
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
 
+  // --------------------------------------------------------------------------
+  // 7. HELPER FUNCTIONS
+  // --------------------------------------------------------------------------
+  // Returns color-coded icons for each of the 4 permit types
   const getTypeIcon = (type: string) => {
     switch (type) {
       case "HOT_WORK":
@@ -226,6 +284,7 @@ export default function DashboardPage() {
     }
   }
 
+  // Calculates and formats human-readable remaining time until permit expires
   const formatCountdown = (targetDate: string) => {
     const diff = new Date(targetDate).getTime() - now
     if (diff <= 0) return "Expired"
@@ -234,6 +293,9 @@ export default function DashboardPage() {
     return `${hours}h ${minutes}m left`
   }
 
+  // --------------------------------------------------------------------------
+  // 8. LOADING STATE SKELETON
+  // --------------------------------------------------------------------------
   if (loading) {
     return (
       <div className="py-20 text-center text-slate-500 text-sm">
@@ -243,9 +305,15 @@ export default function DashboardPage() {
     )
   }
 
+  // --------------------------------------------------------------------------
+  // 9. MAIN DASHBOARD RENDER
+  // --------------------------------------------------------------------------
   return (
     <div className="space-y-6">
-      {/* Toast Notification Banner - High Visibility Green */}
+      {/* -------------------------------------------------------------------- */}
+      {/* SECTION 9A: SUCCESS NOTIFICATION BANNER (HIGH VISIBILITY GREEN)       */}
+      {/* Displays when user saves draft or submits permit from the form        */}
+      {/* -------------------------------------------------------------------- */}
       {notification && (
         <div className="p-4 rounded-xl border-2 border-emerald-500 bg-emerald-50/95 text-emerald-950 shadow-sm flex items-start justify-between transition-all duration-300">
           <div className="flex items-start gap-3.5">
@@ -274,7 +342,10 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Top Banner & Quick Create */}
+      {/* -------------------------------------------------------------------- */}
+      {/* SECTION 9B: SHOP-FLOOR HEADER & "RAISE NEW PERMIT" PRIMARY CTA        */}
+      {/* Requesters & Admins see the primary button to create a new permit     */}
+      {/* -------------------------------------------------------------------- */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-xs">
         <div>
           <div className="flex items-center gap-2">
@@ -303,9 +374,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Overview Stat Cards: What's Active Right Now & What's Expiring Soon */}
+      {/* -------------------------------------------------------------------- */}
+      {/* SECTION 9C: OVERVIEW METRIC CARDS                                     */}
+      {/* Active Work, Expirations within 2h, and Clickable Pending Approvals  */}
+      {/* -------------------------------------------------------------------- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Active Permits */}
+        {/* Metric Card 1: Active Permits Currently On Site */}
         <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -324,7 +398,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Expiring Soon (< 2 Hours) */}
+        {/* Metric Card 2: Permits Expiring Soon (< 2 Hours) */}
         <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -343,7 +417,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Pending Approval Stat Card */}
+        {/* Metric Card 3: Interactive Pending Approval Filter Card */}
         <div 
           onClick={() => setSelectedStatus(selectedStatus === "PENDING_APPROVAL" ? "ALL" : "PENDING_APPROVAL")}
           className={`bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-xs flex items-center justify-between cursor-pointer transition hover:border-blue-400 ${
@@ -369,7 +443,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Urgent Warning Strip for Expiring Soon */}
+      {/* -------------------------------------------------------------------- */}
+      {/* SECTION 9D: URGENT EXPIRY WARNING STRIP                              */}
+      {/* Lists exact permit numbers approaching mandatory auto-suspension     */}
+      {/* -------------------------------------------------------------------- */}
       {expiringSoonPermits.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -395,7 +472,11 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Quick Permit Type Navigation Pills */}
+      {/* -------------------------------------------------------------------- */}
+      {/* SECTION 9E: QUICK 4 PERMIT TYPE NAVIGATION PILLS                     */}
+      {/* All Permits | Hot Work | Confined Space | Height Work | Electrical   */}
+      {/* Shows live dynamic match count badges while typing in search bar     */}
+      {/* -------------------------------------------------------------------- */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {[
           { id: "ALL", label: "All Permits", icon: null, count: baseSearchedPermits.length },
@@ -430,7 +511,10 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Filter and Search Bar */}
+      {/* -------------------------------------------------------------------- */}
+      {/* SECTION 9F: MULTI-CRITERIA FILTER & SEARCH TOOLBAR                   */}
+      {/* Search Input, Sort Dropdown, Area, Date, Type, Status, Reset/Refresh */}
+      {/* -------------------------------------------------------------------- */}
       <div className="bg-white p-3 rounded-xl border border-[#E5E7EB] shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-[240px]">
           <Search className="w-4 h-4 text-slate-400 ml-1" />
@@ -540,7 +624,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Permits List Table (Shop-Floor Responsive) */}
+      {/* -------------------------------------------------------------------- */}
+      {/* SECTION 9G: SHOP-FLOOR RESPONSIVE DATA TABLE                         */}
+      {/* Interactive sortable headers, type badges, countdown, and actions    */}
+      {/* -------------------------------------------------------------------- */}
       <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-xs overflow-hidden">
         {sortedAndFilteredPermits.length === 0 ? (
           <div className="p-12 text-center text-slate-500 text-sm">
@@ -551,6 +638,7 @@ export default function DashboardPage() {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-[#E5E7EB] text-[#475569] font-semibold uppercase tracking-wider">
+                  {/* Column 1: Clickable Sort by Permit Type */}
                   <th
                     className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition select-none group"
                     onClick={() => {
@@ -567,15 +655,26 @@ export default function DashboardPage() {
                       {sortBy === "TYPE_DESC" && <span className="text-[10px] text-blue-600 font-mono font-normal">LOTO→Hot</span>}
                     </div>
                   </th>
+
+                  {/* Column 2: Facility Plant & Sub-Area */}
                   <th className="py-3 px-4">Plant & Area</th>
+
+                  {/* Column 3: Work Description & Assigned Contractor */}
                   <th className="py-3 px-4">Description / Contractor</th>
+
+                  {/* Column 4: Time Schedule & Real-time Expiry Countdown */}
                   <th className="py-3 px-4">Validity & Schedule</th>
+
+                  {/* Column 5: Current Permit Status */}
                   <th className="py-3 px-4">Status</th>
+
+                  {/* Column 6: Action Button */}
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E5E7EB]">
                 {sortedAndFilteredPermits.map((p) => {
+                  // Calculate time remaining until planned work window closes
                   const end = new Date(p.extendedUntil || p.plannedEnd).getTime()
                   const diffHours = (end - now) / (1000 * 60 * 60)
                   const isExpiringSoon = (p.status === "ACTIVE" || p.status === "PENDING_APPROVAL") && diffHours > 0 && diffHours <= 2
@@ -585,6 +684,7 @@ export default function DashboardPage() {
                       key={p.id}
                       className="hover:bg-slate-50/70 transition-colors group"
                     >
+                      {/* Permit Number & Colored Type Icon */}
                       <td className="py-3.5 px-4 font-mono font-semibold text-slate-900">
                         <div className="flex items-center gap-2">
                           <span className="p-1.5 rounded bg-slate-100 border border-slate-200">
@@ -604,6 +704,7 @@ export default function DashboardPage() {
                         </div>
                       </td>
 
+                      {/* Plant and specific area tag */}
                       <td className="py-3.5 px-4 text-slate-700">
                         <div className="font-semibold text-slate-900">
                           {p.area?.name || "General Area"}
@@ -613,6 +714,7 @@ export default function DashboardPage() {
                         </div>
                       </td>
 
+                      {/* Work description and contractor */}
                       <td className="py-3.5 px-4 max-w-xs">
                         <div className="line-clamp-1 font-medium text-slate-800" title={p.workDescription}>
                           {p.workDescription}
@@ -622,6 +724,7 @@ export default function DashboardPage() {
                         </div>
                       </td>
 
+                      {/* Work validity schedule and countdown */}
                       <td className="py-3.5 px-4">
                         <div className="text-slate-800 font-medium">
                           {new Date(p.plannedStart).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -638,6 +741,7 @@ export default function DashboardPage() {
                         </div>
                       </td>
 
+                      {/* Status badge */}
                       <td className="py-3.5 px-4">
                         <div className="flex flex-col gap-1 items-start">
                           <StatusBadge status={p.status} />
@@ -649,6 +753,7 @@ export default function DashboardPage() {
                         </div>
                       </td>
 
+                      {/* Action link to details */}
                       <td className="py-3.5 px-4 text-right">
                         <Link
                           href={`/permits/${p.id}`}

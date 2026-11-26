@@ -1,3 +1,21 @@
+/**
+ * ============================================================================
+ * PERMIT STATE MACHINE & ACTION DISPATCHER (/api/permits/[id]/actions)
+ * ============================================================================
+ * Handles all authorized permit lifecycle actions:
+ * - SUBMIT: Moves DRAFT -> PENDING_APPROVAL.
+ * - REVIEW_APPROVAL: Area Owner / Safety Officer records APPROVED / REJECTED decision + digital signature.
+ * - ACTIVATE: Once both approvals are approved, transitions permit to ACTIVE.
+ * - SUSPEND: Temporarily pauses ongoing work for safety reasons.
+ * - RESUME: Resumes suspended work back to ACTIVE.
+ * - CLOSE: Field requester marks work completed and site cleared.
+ * - VERIFY_CLOSURE: Area Owner confirms physical site inspection -> CLOSED_VERIFIED.
+ * - CANCEL: Cancels unneeded or conflicting permits.
+ *
+ * All state mutations are performed inside an atomic Prisma $transaction
+ * accompanied by immutable audit log generation.
+ */
+
 import { NextRequest, NextResponse } from "next/server"
 import { getSessionUser, unauthorizedResponse } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
@@ -12,6 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const user = await getSessionUser(req)
     if (!user) return unauthorizedResponse()
 
+    // Ensure expired permits are lazily flagged before running action
     await triggerLazyExpiry(params.id)
 
     const permit = await prisma.permit.findUnique({
@@ -31,6 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const body = await req.json()
     const { action, decision, comment, signatureDataUrl, reason, completionNotes, verificationNotes } = body
 
+    // Build execution context for the state machine rules engine
     const ctx = {
       permit,
       currentUser: {
@@ -45,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     let result
     switch (action) {
       case "SUBMIT":
-        // Validate typeSpecificData before submitting
+        // Validate typeSpecificData against Zod schema before submitting
         const config = getPermitTypeConfig(permit.type)
         const parsed = config.schema.safeParse(permit.typeSpecificData || {})
         if (!parsed.success) {
@@ -58,14 +78,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         break
 
       case "REVIEW_APPROVAL":
+        // Validates approver role, non-self-approval rule, and decision validity
         result = PermitStateMachine.canReviewApproval(ctx, decision as ApprovalDecision, comment)
         break
 
       case "ACTIVATE":
+        // Can only activate if both Area Owner and Safety Officer have approved
         result = PermitStateMachine.canActivate(ctx)
         break
 
       case "SUSPEND":
+        // Requires mandatory safety reason
         result = PermitStateMachine.canSuspend(ctx, reason)
         break
 
@@ -74,10 +97,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         break
 
       case "CLOSE":
+        // Requester initiates work completion and cleanup
         result = PermitStateMachine.canClose(ctx, completionNotes)
         break
 
       case "VERIFY_CLOSURE":
+        // Area Owner inspects restored area and verifies closure
         result = PermitStateMachine.canVerifyClosure(ctx, verificationNotes)
         break
 
@@ -93,9 +118,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: result.error }, { status: 400 })
     }
 
-    // Apply database updates in transaction
+    // ------------------------------------------------------------------------
+    // ATOMIC DATABASE TRANSACTION
+    // ------------------------------------------------------------------------
     const updatedPermit = await prisma.$transaction(async (tx) => {
-      // 1. If this was an approval or rejection, update PermitApproval record
+      // Step 1: Record approver decision and digital signature
       if (action === "REVIEW_APPROVAL") {
         let targetRole: Role = user.role
         if (user.role === Role.ADMIN) {
@@ -121,7 +148,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         })
       }
 
-      // 2. Update permit status if targetStatus changed
+      // Step 2: Apply target status update if transitioned
       const updateData: any = {}
       if (result.targetStatus && result.targetStatus !== permit.status) {
         updateData.status = result.targetStatus
@@ -135,7 +162,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         data: updateData,
       })
 
-      // 3. Write immutable audit log
+      // Step 3: Write immutable audit trail entry
       if (result.auditDetails) {
         await tx.auditLog.create({
           data: {

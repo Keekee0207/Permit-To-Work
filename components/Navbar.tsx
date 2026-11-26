@@ -1,16 +1,26 @@
 "use client"
 
+/**
+ * ============================================================================
+ * GLOBAL NAVIGATION BAR COMPONENT
+ * ============================================================================
+ * Persistent header providing application branding, top-level navigation,
+ * user identity / role display, and secure session sign-out.
+ */
+
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
-import { ShieldCheck, Plus, ListFilter, User, LogOut, Settings } from "lucide-react"
+import { ShieldCheck, LogOut } from "lucide-react"
 
 export function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
+  // Currently authenticated user details (name, role, email)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
+  // Fetch session data whenever the route pathname changes
   useEffect(() => {
     fetch("/api/auth/me")
       .then((res) => res.json())
@@ -21,12 +31,14 @@ export function Navbar() {
       .catch(() => setLoading(false))
   }, [pathname])
 
+  // Signs out user and redirects to login screen
   const handleLogout = async () => {
     await fetch("/api/auth/me", { method: "POST" })
     setCurrentUser(null)
     router.push("/login")
   }
 
+  // Quick switch role utility (for field testing and demoing permissions)
   const quickSwitch = async (roleEmail: string) => {
     await fetch("/api/auth/login", {
       method: "POST",
@@ -40,7 +52,7 @@ export function Navbar() {
     <header className="sticky top-0 z-40 bg-white border-b border-[#E5E7EB] shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
+          {/* Brand Logo & Application Title */}
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-2.5 group">
               <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-sm">
@@ -56,7 +68,7 @@ export function Navbar() {
               </div>
             </Link>
 
-            {/* Nav Links - only visible when logged in and not on login page */}
+            {/* Top Navigation Links: Clean Nav showing Dashboard and Admin Panel */}
             {currentUser && pathname !== "/login" && (
               <nav className="hidden md:flex items-center gap-1 ml-4">
                 <Link
@@ -69,6 +81,7 @@ export function Navbar() {
                 >
                   Dashboard
                 </Link>
+                {/* Admin panel is restricted to ADMIN users only */}
                 {currentUser?.role === "ADMIN" && (
                   <Link
                     href="/admin"
@@ -85,7 +98,7 @@ export function Navbar() {
             )}
           </div>
 
-          {/* Right Action & User Profile - only show when logged in and not on login page */}
+          {/* User Profile Badge & Sign Out Button */}
           <div className="flex items-center gap-3">
             {currentUser && pathname !== "/login" ? (
               <div className="flex items-center gap-3">
