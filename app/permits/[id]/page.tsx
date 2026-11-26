@@ -36,6 +36,7 @@ export default function PermitDetailPage() {
   const [loading, setLoading] = useState(true)
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("")
   const [error, setError] = useState<string>("")
+  const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
   // Modals state
@@ -146,6 +147,38 @@ export default function PermitDetailPage() {
         setShowSuspendModal(false)
         setShowClosureModal(false)
         setShowVerifyClosureModal(false)
+
+        if (action === "REVIEW_APPROVAL") {
+          const roleLabel = currentUser?.role === "AREA_OWNER"
+            ? "Area Owner"
+            : currentUser?.role === "SAFETY_OFFICER"
+            ? "Safety Officer"
+            : currentUser?.role === "ADMIN"
+            ? "Administrator"
+            : "Approver"
+          const approverName = currentUser?.name || "You"
+
+          if (payload.decision === "APPROVED") {
+            setActionSuccessMessage(
+              `Permit ${permit.permitNumber} has been officially approved by you (${approverName} - ${roleLabel})! Your digital signature has been permanently recorded.`
+            )
+          } else {
+            setActionSuccessMessage(
+              `Permit ${permit.permitNumber} has been rejected by you (${approverName} - ${roleLabel}). The requester has been notified with your comments.`
+            )
+          }
+        } else if (action === "SUBMIT") {
+          setActionSuccessMessage(`Permit ${permit.permitNumber} has been submitted for Area Owner and Safety Officer sign-off.`)
+        } else if (action === "SUSPEND") {
+          setActionSuccessMessage(`Permit ${permit.permitNumber} suspended immediately for safety compliance.`)
+        } else if (action === "RESUME") {
+          setActionSuccessMessage(`Permit ${permit.permitNumber} resumed and active for work execution.`)
+        } else if (action === "CLOSE") {
+          setActionSuccessMessage(`Work closure initiated for permit ${permit.permitNumber}. Awaiting final Area Owner verification.`)
+        } else if (action === "VERIFY_CLOSURE") {
+          setActionSuccessMessage(`Permit ${permit.permitNumber} closed and verified successfully! Work site restored.`)
+        }
+
         loadPermit()
       }
     } catch (err: any) {
@@ -283,6 +316,27 @@ export default function PermitDetailPage() {
           Logged in: <span className="font-semibold text-slate-800">{currentUser?.name}</span> ({currentUser?.role})
         </div>
       </div>
+
+      {actionSuccessMessage && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs rounded-xl flex items-start justify-between shadow-xs animate-in fade-in duration-300">
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-sm text-emerald-950">Action Completed Successfully</h4>
+              <p className="mt-0.5 leading-relaxed font-medium text-emerald-900">
+                {actionSuccessMessage}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setActionSuccessMessage(null)}
+            className="text-emerald-700 hover:text-emerald-950 font-bold p-1 rounded hover:bg-emerald-100 transition"
+            title="Dismiss notification"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">

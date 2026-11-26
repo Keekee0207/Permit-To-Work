@@ -35,9 +35,42 @@ export default function DashboardPage() {
   const [sortBy, setSortBy] = useState<string>("NEWEST")
   const [onlyMyPending, setOnlyMyPending] = useState<boolean>(false)
   const [availableAreas, setAvailableAreas] = useState<any[]>([])
+  const [notification, setNotification] = useState<{
+    type: "draft" | "submitted"
+    title: string
+    description: string
+  } | null>(null)
 
   // Real-time tick for countdown
   const [now, setNow] = useState<number>(Date.now())
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search)
+      const notify = params.get("notify")
+      const num = params.get("num") || ""
+
+      if (notify === "draft_saved") {
+        setNotification({
+          type: "draft",
+          title: "Draft Saved Successfully!",
+          description: num
+            ? `Permit draft (${num}) has been saved. Only you can view, edit, or submit this draft from your dashboard.`
+            : "Your permit draft has been saved. Only you can view, edit, or submit this draft from your dashboard.",
+        })
+        window.history.replaceState({}, "", window.location.pathname)
+      } else if (notify === "submitted") {
+        setNotification({
+          type: "submitted",
+          title: "Permit Form Submitted Successfully!",
+          description: num
+            ? `Permit (${num}) has been successfully submitted for approval. It is now routed to the Area Owner and Safety Officer for sign-off.`
+            : "Your permit form has been successfully submitted for approval. It is now routed to the Area Owner and Safety Officer for sign-off.",
+        })
+        window.history.replaceState({}, "", window.location.pathname)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 15000)
@@ -212,6 +245,40 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification Banner */}
+      {notification && (
+        <div
+          className={`p-4 rounded-xl border flex items-start justify-between shadow-xs transition-all duration-300 ${
+            notification.type === "draft"
+              ? "bg-emerald-50 border-emerald-300 text-emerald-950"
+              : "bg-blue-50 border-blue-300 text-blue-950"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                notification.type === "draft"
+                  ? "bg-emerald-100 text-emerald-600"
+                  : "bg-blue-100 text-blue-600"
+              }`}
+            >
+              <CheckCircle2 className="w-5 h-5 stroke-[2.2]" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold leading-tight">{notification.title}</h3>
+              <p className="text-xs mt-1 leading-relaxed opacity-90">{notification.description}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setNotification(null)}
+            className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-black/5 transition text-xs font-bold"
+            title="Dismiss notification"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Banner & Quick Create */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#E5E7EB] shadow-xs">
         <div>

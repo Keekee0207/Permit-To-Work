@@ -263,16 +263,14 @@ function PermitFormContent() {
           })
         }
 
+        const permitNum = data.permit?.permitNumber || ""
         if (!submitNow) {
-          // Saved as draft: show confirmation banner/toast and redirect to dashboard
-          setDraftSavedToast(true)
-          setTimeout(() => {
-            router.push("/")
-            router.refresh()
-          }, 800)
+          // Saved as draft: redirect to dashboard with notification
+          router.push(`/?notify=draft_saved&num=${encodeURIComponent(permitNum)}`)
+          router.refresh()
         } else {
-          // Submitted for approval: return directly to dashboard
-          router.push("/")
+          // Submitted for approval: redirect to dashboard with notification
+          router.push(`/?notify=submitted&num=${encodeURIComponent(permitNum)}`)
           router.refresh()
         }
       }
