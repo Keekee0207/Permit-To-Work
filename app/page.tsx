@@ -245,33 +245,28 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Toast Notification Banner */}
+      {/* Toast Notification Banner - High Visibility Green */}
       {notification && (
-        <div
-          className={`p-4 rounded-xl border flex items-start justify-between shadow-xs transition-all duration-300 ${
-            notification.type === "draft"
-              ? "bg-emerald-50 border-emerald-300 text-emerald-950"
-              : "bg-blue-50 border-blue-300 text-blue-950"
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                notification.type === "draft"
-                  ? "bg-emerald-100 text-emerald-600"
-                  : "bg-blue-100 text-blue-600"
-              }`}
-            >
-              <CheckCircle2 className="w-5 h-5 stroke-[2.2]" />
+        <div className="p-4 rounded-xl border-2 border-emerald-500 bg-emerald-50/95 text-emerald-950 shadow-sm flex items-start justify-between transition-all duration-300">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <CheckCircle2 className="w-6 h-6 stroke-[2.4]" />
             </div>
             <div>
-              <h3 className="text-sm font-bold leading-tight">{notification.title}</h3>
-              <p className="text-xs mt-1 leading-relaxed opacity-90">{notification.description}</p>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 font-mono">
+                  Success
+                </span>
+                <h3 className="text-sm font-bold text-emerald-950">{notification.title}</h3>
+              </div>
+              <p className="text-xs text-emerald-900 mt-1 font-medium leading-relaxed">
+                {notification.description}
+              </p>
             </div>
           </div>
           <button
             onClick={() => setNotification(null)}
-            className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-black/5 transition text-xs font-bold"
+            className="p-1 rounded-md text-emerald-700 hover:text-emerald-950 hover:bg-emerald-200/50 transition text-sm font-bold ml-2"
             title="Dismiss notification"
           >
             ✕

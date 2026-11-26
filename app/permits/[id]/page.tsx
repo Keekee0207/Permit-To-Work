@@ -317,20 +317,28 @@ export default function PermitDetailPage() {
         </div>
       </div>
 
+      {/* Success Notification Banner - High Visibility Green */}
       {actionSuccessMessage && (
-        <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs rounded-xl flex items-start justify-between shadow-xs animate-in fade-in duration-300">
-          <div className="flex items-start gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+        <div className="p-4 bg-emerald-50/95 border-2 border-emerald-500 text-emerald-950 text-xs rounded-xl flex items-start justify-between shadow-sm animate-in fade-in duration-300">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <CheckCircle2 className="w-6 h-6 stroke-[2.4]" />
+            </div>
             <div>
-              <h4 className="font-bold text-sm text-emerald-950">Action Completed Successfully</h4>
-              <p className="mt-0.5 leading-relaxed font-medium text-emerald-900">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 font-mono">
+                  Approved & Verified
+                </span>
+                <h4 className="font-bold text-sm text-emerald-950">Approval Recorded Successfully</h4>
+              </div>
+              <p className="mt-1 leading-relaxed font-medium text-emerald-900 text-xs">
                 {actionSuccessMessage}
               </p>
             </div>
           </div>
           <button
             onClick={() => setActionSuccessMessage(null)}
-            className="text-emerald-700 hover:text-emerald-950 font-bold p-1 rounded hover:bg-emerald-100 transition"
+            className="text-emerald-700 hover:text-emerald-950 font-bold p-1 rounded-md hover:bg-emerald-200/50 transition text-sm ml-2"
             title="Dismiss notification"
           >
             ✕
