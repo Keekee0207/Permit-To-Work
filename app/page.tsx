@@ -66,11 +66,8 @@ export default function DashboardPage() {
       }
       setAvailableAreas(areasList)
 
-      const url = new URL("/api/permits", window.location.origin)
-      if (onlyMyPending) {
-        url.searchParams.set("pendingMyApproval", "true")
-      }
-      const res = await fetch(url.toString())
+      // Fetch all visible permits for this user without server-side filter conflicts
+      const res = await fetch("/api/permits")
       const data = await res.json()
       setPermits(data.permits || [])
     } catch (err) {
@@ -82,7 +79,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData()
-  }, [onlyMyPending])
+  }, [])
 
   // Computed metrics
   const activePermits = permits.filter((p) => p.status === "ACTIVE")
@@ -98,22 +95,47 @@ export default function DashboardPage() {
 
   // Filtered list for table
   const filteredPermits = permits.filter((p) => {
-    if (selectedStatus !== "ALL" && p.status !== selectedStatus) return false
-    if (selectedType !== "ALL" && p.type !== selectedType) return false
-    if (selectedArea !== "ALL" && p.areaId !== selectedArea) return false
-    if (dateFilter) {
-      const pStart = new Date(p.plannedStart).toISOString().slice(0, 10)
-      const pEnd = new Date(p.extendedUntil || p.plannedEnd).toISOString().slice(0, 10)
-      if (dateFilter < pStart || dateFilter > pEnd) return false
+    // 1. Status Filter
+    if (selectedStatus !== "ALL") {
+      if (selectedStatus === "DRAFT") {
+        if (p.status !== "DRAFT") return false
+      } else if (p.status !== selectedStatus) {
+        return false
+      }
     }
+
+    // 2. Permit Type Filter
+    if (selectedType !== "ALL" && p.type !== selectedType) return false
+
+    // 3. Plant Area Filter
+    if (selectedArea !== "ALL" && p.areaId !== selectedArea) return false
+
+    // 4. Date Filter (matches any permit whose planned window overlaps the selected date)
+    if (dateFilter) {
+      try {
+        const selectedDateStr = dateFilter
+        const pStartStr = new Date(p.plannedStart).toISOString().slice(0, 10)
+        const pEndStr = new Date(p.extendedUntil || p.plannedEnd).toISOString().slice(0, 10)
+        if (selectedDateStr < pStartStr || selectedDateStr > pEndStr) return false
+      } catch (e) {
+        // Fallback if date parsing fails
+      }
+    }
+
+    // 5. Search Bar Query (Case-insensitive across permit #, description, area, contractor, and equipment)
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      const matchNumber = p.permitNumber.toLowerCase().includes(q)
-      const matchDesc = p.workDescription.toLowerCase().includes(q)
+      const q = searchQuery.toLowerCase().trim()
+      const matchNumber = p.permitNumber?.toLowerCase().includes(q)
+      const matchDesc = p.workDescription?.toLowerCase().includes(q)
       const matchArea = p.area?.name?.toLowerCase().includes(q)
       const matchContractor = p.contractorTeam?.toLowerCase().includes(q)
-      if (!matchNumber && !matchDesc && !matchArea && !matchContractor) return false
+      const matchEquipment = p.equipment?.name?.toLowerCase().includes(q) || p.equipment?.tagCode?.toLowerCase().includes(q)
+      const matchRequester = p.requester?.name?.toLowerCase().includes(q)
+      if (!matchNumber && !matchDesc && !matchArea && !matchContractor && !matchEquipment && !matchRequester) {
+        return false
+      }
     }
+
     return true
   })
 
